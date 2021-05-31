@@ -3,10 +3,6 @@ import json
 import argparse
 
 ap = argparse.ArgumentParser()
-ap.add_argument("channel",
-                type=int,
-                default=0,
-                help="Mute selected channel")
 ap.add_argument("--hostname",
                 type=str,
                 default="ultralite-avb.local",
@@ -39,12 +35,18 @@ def set_channel_matrix(c, key, value):
     return f
 
 
-def main():
-    s = 0
-    if get_channel_matrix(args.channel)['mute'] == 0:
-        s = 1
-    set_channel_matrix(args.channel, 'mute', s)
+def toggle_channel_matrix(channel, key):
+    s = get_channel_matrix(channel)[key]
+    j = abs(s - 1)
+    r = set_channel_matrix(channel, key, j)
+    if r.code == 204:
+        return str(int(j))
+    else:
+        return "FAILURE"
 
+
+def main():
+    print(toggle_channel_matrix(0, 'mute'))
 
 if __name__ == '__main__':
     main()
