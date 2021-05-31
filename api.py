@@ -1,5 +1,6 @@
 import flask
 from flask import request
+import waitress
 import call
 
 app = flask.Flask('MOTU API')
@@ -18,4 +19,5 @@ def mute_toggle():
     return call.toggle_channel_matrix(channel, 'mute')
 
 
-app.run()
+if __name__ == "__main__":
+    waitress.serve(app, port=5000)
