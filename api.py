@@ -1,22 +1,27 @@
-import flask
-from flask import request
+from flask import Flask, request
 import waitress
-import call
+import motu
 
-app = flask.Flask('MOTU API')
+app = Flask('MOTU API')
 app.config["DEBUG"] = True
+motu_ds = motu.DataStore()
+
 
 @app.route('/', methods=['GET'])
 def home():
     return '<h1>MOTU API</h1>'
 
+
 @app.route('/api/v1/motu/mute-toggle', methods=['GET'])
 def mute_toggle():
-    if 'channel' in request.args:
-        channel = int(request.args['channel'])
-    else:
-        return "Error: No channel field provided. Please specify channel."
-    return call.toggle_channel_matrix(channel, 'mute')
+    if 'bus' not in request.args:
+        return "Error: No bus field provided. Please specify bus."
+    if 'index' not in request.args:
+        return "Error: No index field provided. Please specify index."
+    bus = str(request.args['bus'])
+    channel = int(request.args['index'])
+    path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
+    return motu_ds.toggle(path)
 
 
 if __name__ == "__main__":
