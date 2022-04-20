@@ -14,7 +14,7 @@ class DataStore():
             )
         )
         with req.urlopen(r) as f:
-            return json.loads(f.read())
+            return int(json.loads(f.read())['value'])
 
     def set(self, path, value):
         r = req.Request(
@@ -30,7 +30,7 @@ class DataStore():
 
     def toggle(self, path):
         try:
-            s = self.get(path)['value']
+            s = self.get(path)
         except KeyError:
             return "FAILURE"
         j = abs(s - 1)
