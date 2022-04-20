@@ -36,6 +36,6 @@ class DataStore():
         j = abs(s - 1)
         r = self.set(path, j)
         if r.code == 204:
-            return str(int(j))
+            return int(j)
         else:
             return "FAILURE"

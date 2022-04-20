@@ -22,7 +22,19 @@ def mute_toggle():
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
     path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
-    return json.dumps({'status': motu_ds.toggle(path)})
+    return json.dumps({'status': str(motu_ds.toggle(path))})
+
+
+@app.route('/api/v1/motu/mute-status', methods=['GET'])
+def mute_status():
+    if 'bus' not in request.args:
+        return "Error: No bus field provided. Please specify bus."
+    if 'index' not in request.args:
+        return "Error: No index field provided. Please specify index."
+    bus = str(request.args['bus'])
+    channel = int(request.args['index'])
+    path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
+    return json.dumps({'status': str(motu_ds.get(path))})
 
 
 if __name__ == "__main__":
