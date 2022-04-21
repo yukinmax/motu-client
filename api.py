@@ -1,11 +1,17 @@
 from flask import Flask, request
 import json
 import waitress
+import logging
+from prometheus_flask_exporter import PrometheusMetrics
 import motu
+
+logging.basicConfig(level=logging.INFO)
+logging.info("Setting LOGLEVEL to INFO")
 
 app = Flask('MOTU API')
 app.config["DEBUG"] = True
 motu_ds = motu.DataStore()
+metrics = PrometheusMetrics(app)
 
 
 @app.route('/', methods=['GET'])
