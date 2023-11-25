@@ -84,9 +84,10 @@ class Store():
         if response:
             self.data.update(response.json())
             self.etag = response.headers['ETag']
-            print("Modified: {}".format(self.base_path))
+            # print("Modified: {}".format(self.base_path))
         else:
-            print("Not Modified: {}".format(self.base_path))
+            # print("Not Modified: {}".format(self.base_path))
+            pass
 
     async def get(self, path):
         value = self.data[path]
@@ -127,7 +128,7 @@ class DataStore(Store):
         )
         if response:
             self.data[path] = value
-            print("Modified: {}".format(self.base_path))
+            # print("Modified: {}".format(self.base_path))
         return response
 
     async def toggle(self, path):
