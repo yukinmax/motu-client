@@ -90,7 +90,6 @@ class Store():
 
     async def get(self, path):
         value = self.data[path]
-        print(value)
         return value
 
     async def poll(self):
@@ -128,7 +127,6 @@ class DataStore(Store):
         )
         if response:
             self.data[path] = value
-            print(value)
             print("Modified: {}".format(self.base_path))
         return response
 
