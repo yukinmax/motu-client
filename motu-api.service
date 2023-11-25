@@ -7,10 +7,10 @@ After=network.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/motu-client/
-ExecStart=hypercorn -b localhost:5000 api:app
+ExecStart=/home/pi/.pyenv/shims/hypercorn -b 0.0.0.0:5000 api:app
 RestartSec=10
 Restart=always
-TimeoutSec=10
+TimeoutSec=30
 
 [Install]
 WantedBy=multi-user.target
