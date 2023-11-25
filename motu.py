@@ -97,7 +97,7 @@ class Store():
         while True:
             try:
                 await self.refresh()
-                await asyncio.sleep(1)
+                await asyncio.sleep(0)
             except asyncio.CancelledError:
                 break
 

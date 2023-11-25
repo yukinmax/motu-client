@@ -1,6 +1,7 @@
 from quart import Quart, request
 import json
 import logging
+import asyncio
 from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
 import motu
@@ -19,6 +20,10 @@ app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
 @app.before_serving
 async def startup():
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(motu_ds.refresh())
+        tg.create_task(motu_ms.refresh())
+    logging.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
     app.add_background_task(motu_ms.poll)
 
