@@ -2,6 +2,10 @@ import requests as req
 import json
 import asyncio
 import random
+import math
+
+
+level_range = (0, 10 ** (12 / 20))
 
 
 async def request(url, params=None, etag=None, method='GET', data=None):
@@ -25,37 +29,66 @@ async def request(url, params=None, etag=None, method='GET', data=None):
     return None
 
 
-def nested_set(dic, keys, value):
-    if len(keys) > 1:
-        dd = dic.setdefault(keys.pop(0), {})
-        nested_set(dd, keys, value)
+async def limit_to_range(value, minimum, maximum):
+    return max(min(value, maximum), minimum)
+
+
+async def level_to_db(value):
+    if value == 0:
+        return -math.inf
     else:
-        dic[keys.pop()] = value
+        return round(20 * math.log10(value), 2)
 
 
-def parse_response(json):
-    d = {}
-    for key in json:
-        keys = key.split('/')
+async def level_from_db(db_value):
+    db_value = float(db_value)
+    if db_value > 12:
+        db_value = 12
+    elif db_value < -120:
+        db_value = -math.inf
+    return 10 ** (db_value / 20)
+
+
+async def db_from_raw(value, range_mapping, reverse=False):
+    from_index = int(reverse)
+    to_index = int(not(reverse))
+    if reverse:
+        type_conversion = int
+    else:
+        type_conversion = float
+    try:
+        from_min_abs = range_mapping[0][from_index][0]
+        to_min_abs = range_mapping[0][to_index][0]
+    except TypeError:
+        from_min_abs = range_mapping[0][from_index]
+        to_min_abs = range_mapping[0][to_index]
+    try:
+        from_max_abs = range_mapping[-1][from_index][1]
+        to_max_abs = range_mapping[-1][to_index][1]
+    except TypeError:
+        from_max_abs = range_mapping[-1][from_index]
+        to_max_abs = range_mapping[-1][to_index]
+    value = await limit_to_range(value, from_min_abs, from_max_abs)
+    for i in range_mapping:
         try:
-            nested_set(d, keys, {'value': json[key]})
+            from_min = i[from_index][0]
+            from_max = i[from_index][1]
+            to_min = i[to_index][0]
+            to_max = i[to_index][1]
         except TypeError:
-            print(key)
-    return d
+            if value == i[from_index]:
+                return type_conversion(i[to_index])
+        else:
+            if from_min <= value < from_max:
+                break
+    cr = (to_max - to_min) / (from_max - from_min)
+    out_value = ((value - from_min) * cr) + to_min
+    out_value = await limit_to_range(out_value, to_min_abs, to_max_abs)
+    return type_conversion(out_value)
 
 
 def generate_client_id():
     return random.getrandbits(32)
-
-
-async def poll_all():
-    ds = DataStore()
-    ms = Meters()
-    await ds.refresh()
-    await ms.refresh()
-    async with asyncio.TaskGroup() as tg:
-        tg.create_task(ds.poll())
-        tg.create_task(ms.poll())
 
 
 class Store():
@@ -156,7 +189,3 @@ class Meters(Store):
             'meters': 'mix/gate:mix/comp:mix/level:mix/leveler:ext/input'
         }
         self.client_id = generate_client_id()
-
-
-if __name__ == '__main__':
-    asyncio.run(poll_all())
