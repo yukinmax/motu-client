@@ -1,26 +1,40 @@
-from flask import Flask, request
+from quart import Quart, request
 import json
-import waitress
 import logging
-from prometheus_flask_exporter import PrometheusMetrics
+import asyncio
+from aioprometheus import MetricsMiddleware
+from aioprometheus.asgi.quart import metrics
 import motu
 
 logging.basicConfig(level=logging.INFO)
 logging.info("Setting LOGLEVEL to INFO")
 
-app = Flask('MOTU API')
+app = Quart('MOTU API')
 app.config["DEBUG"] = True
 motu_ds = motu.DataStore()
-metrics = PrometheusMetrics(app)
+motu_ms = motu.Meters()
+
+app.asgi_app = MetricsMiddleware(app.asgi_app)
+app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
+
+
+@app.before_serving
+async def startup():
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(motu_ds.refresh())
+        tg.create_task(motu_ms.refresh())
+    logging.info("Initial data refresh has completed")
+    app.add_background_task(motu_ds.poll)
+    app.add_background_task(motu_ms.poll)
 
 
 @app.route('/', methods=['GET'])
-def home():
+async def home():
     return '<h1>MOTU API</h1>'
 
 
 @app.route('/api/v1/motu/mute-toggle', methods=['GET'])
-def mute_toggle():
+async def mute_toggle():
     if 'bus' not in request.args:
         return "Error: No bus field provided. Please specify bus."
     if 'index' not in request.args:
@@ -28,11 +42,11 @@ def mute_toggle():
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
     path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
-    return json.dumps({'status': str(motu_ds.toggle(path))})
+    return json.dumps({'status': str(await motu_ds.toggle(path))})
 
 
 @app.route('/api/v1/motu/mute-status', methods=['GET'])
-def mute_status():
+async def mute_status():
     if 'bus' not in request.args:
         return "Error: No bus field provided. Please specify bus."
     if 'index' not in request.args:
@@ -40,8 +54,8 @@ def mute_status():
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
     path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
-    return json.dumps({'status': str(motu_ds.get(path))})
+    return json.dumps({'status': str(await motu_ds.get(path))})
 
 
 if __name__ == "__main__":
-    waitress.serve(app, port=5000)
+    app.run(port='5088')

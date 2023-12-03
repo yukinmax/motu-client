@@ -1,0 +1,16 @@
+# /etc/systemd/system/motu-api.service
+[Unit]
+Description=API for MOTU audio mixer
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/motu-client/
+ExecStart=/home/pi/.pyenv/shims/hypercorn -b 0.0.0.0:5000 api:app
+RestartSec=10
+Restart=always
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target
