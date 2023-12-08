@@ -1,11 +1,11 @@
 from quart import Quart, request
 import json
 import logging
-import math
 import asyncio
 from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
 import motu
+import raw_panel
 
 logging.basicConfig(level=logging.INFO)
 logging.info("Setting LOGLEVEL to INFO")
@@ -14,15 +14,13 @@ app = Quart('MOTU API')
 app.config["DEBUG"] = True
 motu_ds = motu.DataStore()
 motu_ms = motu.Meters()
+skaarhoj_panel = raw_panel.RawPanel('waveboard')
+skaarhoj_panel.set_ds(motu_ds)
 
 app.asgi_app = MetricsMiddleware(app.asgi_app)
 app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
-raw_db_range_mapping = (
-    (0, -math.inf),
-    ((1, 125), (-120, -30)),
-    ((125, 1000), (-30, 12))
-)
+raw_db_range_mapping = raw_panel.raw_db_range_mapping
 
 
 @app.before_serving
@@ -30,9 +28,25 @@ async def startup():
     async with asyncio.TaskGroup() as tg:
         tg.create_task(motu_ds.refresh())
         tg.create_task(motu_ms.refresh())
+        tg.create_task(skaarhoj_panel.connect())
     logging.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
     app.add_background_task(motu_ms.poll)
+    app.add_background_task(skaarhoj_panel.handle_requests)
+
+
+@app.route('/api/v1/panel/fader', methods=['GET'])
+async def fader():
+    try:
+        hwid = int(request.args['id'])
+    except KeyError():
+        return "Error: Fader ID is not provided"
+    try:
+        value = int(request.args['value'])
+    except KeyError():
+        value = None
+    await skaarhoj_panel.move_fader(hwid, value)
+    return 'OK'
 
 
 @app.route('/', methods=['GET'])

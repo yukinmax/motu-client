@@ -3,6 +3,7 @@ import json
 import asyncio
 import random
 import math
+import logging
 
 
 level_range = (0, 10 ** (12 / 20))
@@ -87,18 +88,35 @@ async def db_from_raw(value, range_mapping, reverse=False):
     return type_conversion(out_value)
 
 
+async def dict_diff(d_old, d_new):
+    return dict(set(d_new.items()) - set(d_old.items()))
+
+
+async def dict_values_to_tuples(d):
+    d_new = {}
+    for k, v in d.items():
+        try:
+            d_new[k] = tuple(v)
+        except TypeError:
+            d_new[k] = v
+    return d_new
+
+
 def generate_client_id():
     return random.getrandbits(32)
 
 
 class Store():
-    def __init__(self, hostname="ultralite-avb.local"):
+    def __init__(self,
+                 hostname="ultralite-avb.local",
+                 change_handler=None):
         self.hostname = hostname
         self.base_path = ''
         self.refresh_params = None
         self.etag = None
         self.client_id = None
         self.data = {}
+        self.change_handler = change_handler
 
     async def refresh(self):
         url = 'http://{}/{}'.format(
@@ -115,18 +133,25 @@ class Store():
             etag=self.etag
         )
         if response:
-            self.data.update(response.json())
+            # new_data = await dict_values_to_tuples(response.json())
+            # data_diff = await dict_diff(self.data, new_data)
+            data_diff = response.json()
             self.etag = response.headers['ETag']
-            # print("Modified: {}".format(self.base_path))
+            if data_diff:
+                self.data.update(data_diff)
+                logging.debug("Modified: {} -> {}".format(self.base_path,
+                                                          data_diff))
+                if self.change_handler:
+                    self.change_handler.handle(data_diff)
         else:
-            # print("Not Modified: {}".format(self.base_path))
-            pass
+            logging.debug("Not modified: {}".format(self.base_path))
 
     async def get(self, path):
         value = self.data[path]
         return value
 
     async def poll(self):
+        logging.info("Polling MOTU {}...".format(self.base_path))
         while True:
             try:
                 await self.refresh()
@@ -160,8 +185,12 @@ class DataStore(Store):
             data=data
         )
         if response:
-            self.data[path] = value
-            # print("Modified: {}".format(self.base_path))
+            data_diff = {path: value}
+            self.data.update(data_diff)
+            logging.debug("Modified: {} -> {}".format(self.base_path,
+                                                      data_diff))
+            if self.change_handler:
+                self.change_handler.handle({path: value})
         return response
 
     async def toggle(self, path):
