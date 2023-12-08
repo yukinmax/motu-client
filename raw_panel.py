@@ -93,7 +93,7 @@ class RawPanel():
         self.info['EnvironmentalHealth'] = value
 
     async def _hardware_change(self, hwid, value):
-        t = time.monotonic()
+        t = time.perf_counter()
         change_hist = self.hw_change_timings.setdefault(hwid, 0)
         if t - change_hist < self.delay:
             return
@@ -117,7 +117,7 @@ class RawPanel():
             else:
                 if self.ds:
                     await self.ds.set(path, v)
-        self.hw_change_timings[hwid] = time.monotonic()
+        self.hw_change_timings[hwid] = time.perf_counter()
 
     def set_ds(self, datastore):
         self.ds = datastore
