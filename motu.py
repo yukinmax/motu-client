@@ -107,18 +107,16 @@ def generate_client_id():
 
 
 class Store():
-    def __init__(self,
-                 hostname="ultralite-avb.local",
-                 change_handler=None):
+    def __init__(self, hostname="ultralite-avb.local"):
         self.hostname = hostname
         self.base_path = ''
         self.refresh_params = None
         self.etag = None
         self.client_id = None
         self.data = {}
-        self.change_handler = change_handler
+        self.change_handler = None
 
-    async def refresh(self):
+    async def refresh(self, diff_check=False):
         url = 'http://{}/{}'.format(
             self.hostname,
             self.base_path
@@ -133,16 +131,18 @@ class Store():
             etag=self.etag
         )
         if response:
-            # new_data = await dict_values_to_tuples(response.json())
-            # data_diff = await dict_diff(self.data, new_data)
-            data_diff = response.json()
+            if diff_check:
+                new_data = await dict_values_to_tuples(response.json())
+                data_diff = await dict_diff(self.data, new_data)
+            else:
+                data_diff = response.json()
             self.etag = response.headers['ETag']
             if data_diff:
                 self.data.update(data_diff)
                 logging.debug("Modified: {} -> {}".format(self.base_path,
                                                           data_diff))
                 if self.change_handler:
-                    self.change_handler.handle(data_diff)
+                    await self.change_handler(data_diff)
         else:
             logging.debug("Not modified: {}".format(self.base_path))
 
@@ -150,14 +150,17 @@ class Store():
         value = self.data[path]
         return value
 
-    async def poll(self):
+    async def poll(self, diff_check=False):
         logging.info("Polling MOTU {}...".format(self.base_path))
         while True:
             try:
-                await self.refresh()
+                await self.refresh(diff_check=diff_check)
                 await asyncio.sleep(0)
             except asyncio.CancelledError:
                 break
+
+    def set_change_handler(self, handler):
+        self.change_handler = handler
 
 
 class DataStore(Store):
@@ -190,7 +193,7 @@ class DataStore(Store):
             logging.debug("Modified: {} -> {}".format(self.base_path,
                                                       data_diff))
             if self.change_handler:
-                self.change_handler.handle({path: value})
+                await self.change_handler({path: value})
         return response
 
     async def toggle(self, path):

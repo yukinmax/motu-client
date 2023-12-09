@@ -4,12 +4,13 @@ import math
 import logging
 import motu
 import time
+from bidict import bidict
 
-tmp_mapping = {
+tmp_mapping = bidict({
     '13': 'mix/chan/0/matrix/aux/0/send',
     '14': 'mix/chan/2/matrix/aux/0/send',
     '15': 'mix/chan/4/matrix/aux/0/send',
-}
+})
 
 raw_db_range_mapping = (
     (0, -math.inf),
@@ -144,7 +145,7 @@ class RawPanel():
         self.writer.close()
         await self.writer.wait_closed()
 
-    async def handle(self, request):
+    async def handle_request(self, request):
         key, value = request.split('=')
         try:
             command, hwid = key.split('#')
@@ -162,7 +163,7 @@ class RawPanel():
         while True:
             try:
                 r = await self.receive()
-                await self.handle(r)
+                await self.handle_request(r)
             except asyncio.CancelledError:
                 break
 
@@ -174,6 +175,20 @@ class RawPanel():
         record = (await self.reader.readline()).decode().strip()
         logging.debug(record)
         return record
+
+    async def process_feedback(self, d):
+        for k, v in d.items():
+            try:
+                hwid = int(tmp_mapping.inverse[k])
+            except KeyError:
+                logging.debug("path {} is not mapped".format(k))
+                continue
+            raw_value = await motu.db_from_raw(
+                (await motu.level_to_db(float(v))),
+                raw_db_range_mapping,
+                reverse=True
+            )
+            await self.move_fader(hwid, raw_value)
 
     async def move_fader(self, hwid, value):
         msg = {
