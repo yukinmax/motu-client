@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import re
 import logging
 import motu
 import time
@@ -10,7 +11,129 @@ tmp_mapping = bidict({
     '13': 'mix/chan/0/matrix/aux/0/send',
     '14': 'mix/chan/2/matrix/aux/0/send',
     '15': 'mix/chan/4/matrix/aux/0/send',
+    '61.4': 'mix/chan/0/matrix/mute',
+    '64.4': 'mix/chan/2/matrix/mute',
+    '67.4': 'mix/chan/4/matrix/mute',
 })
+
+feedback_map = {
+    'mix/chan/0/matrix/mute': {
+        'button': {
+            'hwcid': 61,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/chan/2/matrix/mute': {
+        'button': {
+            'hwcid': 64,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/chan/4/matrix/mute': {
+        'button': {
+            'hwcid': 67,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/chan/0/matrix/aux/0/send': {
+        'fader': {
+            'hwcid': 13,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 13
+            }
+        },
+        'display': {
+            'hwcid': 29,
+            'text': {
+                'formatting': 7,
+                'title': 'Mic',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/chan/2/matrix/aux/0/send': {
+        'fader': {
+            'hwcid': 14,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 13
+            }
+        },
+        'display': {
+            'hwcid': 30,
+            'text': {
+                'formatting': 7,
+                'title': 'PC',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/chan/4/matrix/aux/0/send': {
+        'fader': {
+            'hwcid': 15,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 13
+            }
+        },
+        'display': {
+            'hwcid': 31,
+            'text': {
+                'formatting': 7,
+                'title': 'Music',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/level/0': {
+        'display1': {
+            'hwcid': 37,
+            'channels': [0],
+            'audio_meter': {
+                'mono': True,
+                'meter_type': 1,
+            }
+        },
+        'display2': {
+            'hwcid': 38,
+            'channels': [2, 3],
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
+        },
+        'display3': {
+            'hwcid': 39,
+            'channels': [4, 5],
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
+        }
+    }
+}
 
 raw_db_range_mapping = (
     (0, -math.inf),
@@ -93,32 +216,38 @@ class RawPanel():
     async def _update_EnvironmentalHealth(self, value):
         self.info['EnvironmentalHealth'] = value
 
-    async def _hardware_change(self, hwid, value):
+    async def _hardware_change(self, hwcid, value):
+        try:
+            path = tmp_mapping[hwcid]
+        except KeyError:
+            logging.info("hwcid {} is not mapped".format(hwcid))
+            return
         t = time.perf_counter()
-        change_hist = self.hw_change_timings.setdefault(hwid, 0)
+        change_hist = self.hw_change_timings.setdefault(hwcid, 0)
         if t - change_hist < self.delay:
             return
+        path_type = re.search(r"\w+$", path)[0]
         try:
             s, v = value.split(':')
         except ValueError:
             v = value
-        logging.debug("hwid {} is set to {}".format(hwid, v))
-        try:
-            v = int(v)
-        except ValueError:
-            pass
-        else:
-            v = await motu.db_from_raw(v, raw_db_range_mapping)
-            v = await motu.level_from_db(v)
-        finally:
+        logging.debug("hwcid {} is set to {}".format(hwcid, v))
+        if path_type in ('send',):
             try:
-                path = tmp_mapping[hwid]
-            except KeyError:
-                logging.info("hwid {} is not mapped".format(hwid))
+                v = int(v)
+            except ValueError:
+                pass
             else:
+                v = await motu.db_from_raw(v, raw_db_range_mapping)
+                v = await motu.level_from_db(v)
+            finally:
                 if self.ds:
                     await self.ds.set(path, v)
-        self.hw_change_timings[hwid] = time.perf_counter()
+        elif path_type in ('mute', 'solo'):
+            if re.match(r"Down", v):
+                if self.ds:
+                    await self.ds.toggle(path)
+        self.hw_change_timings[hwcid] = time.perf_counter()
 
     def set_ds(self, datastore):
         self.ds = datastore
@@ -146,18 +275,23 @@ class RawPanel():
         await self.writer.wait_closed()
 
     async def handle_request(self, request):
-        key, value = request.split('=')
         try:
-            command, hwid = key.split('#')
+            key, value = request.split('=')
+        except:
+            logging.warn("Invalid request: {}".format(request))
+            return
+        try:
+            command, hwcid = key.split('#')
         except ValueError:
             command = key
             params = (value,)
         else:
-            params = hwid, value
+            params = hwcid, value
         try:
             await self.commands[command](*params)
         except KeyError:
             logging.warn(request)
+            return
 
     async def handle_requests(self):
         while True:
@@ -176,27 +310,179 @@ class RawPanel():
         logging.debug(record)
         return record
 
-    async def process_feedback(self, d):
+    async def process_data_feedback(self, d):
         for k, v in d.items():
             try:
-                hwid = int(tmp_mapping.inverse[k])
+                mapping = feedback_map[k]
             except KeyError:
                 logging.debug("path {} is not mapped".format(k))
                 continue
-            raw_value = await motu.db_from_raw(
-                (await motu.level_to_db(float(v))),
-                raw_db_range_mapping,
-                reverse=True
-            )
-            await self.move_fader(hwid, raw_value)
+            t = re.search(r"\w+$", k)[0]
+            if t == 'send':
+                db_value = await motu.level_to_db(float(v))
+                raw_value = await motu.db_from_raw(
+                    db_value,
+                    raw_db_range_mapping,
+                    reverse=True
+                )
+            for m in mapping:
+                hwcid = mapping[m]['hwcid']
+                msg = {}
+                if m in ('button', 'fader'):
+                    try:
+                        mode = mapping[m]['mode']
+                    except KeyError:
+                        pass
+                    else:
+                        msg.update(await self._set_mode(hwcid, **mode))
+                    try:
+                        color = mapping[m]['color'].copy()
+                    except KeyError:
+                        pass
+                    else:
+                        for color_type, color_value in color.items():
+                            try:
+                                color[color_type] = (
+                                    color_value[0] if v else color_value[1]
+                                )
+                            except TypeError:
+                                pass
+                        msg.update(await self._set_color(hwcid, **color))
+                if m == 'fader':
+                    msg.update(await self._move_fader(hwcid, raw_value))
+                if m == 'display':
+                    try:
+                        txt = mapping[m]['text']
+                    except KeyError:
+                        txt = {}
+                    msg.update(await self._set_text(hwcid,
+                                                    text1=db_value,
+                                                    **txt))
+                msg = json.dumps(msg)
+                logging.debug(msg)
+                await self.send(msg)
 
-    async def move_fader(self, hwid, value):
+    async def process_meters_feedback(self, d):
+        for k, v in d.items():
+            try:
+                mapping = feedback_map[k]
+            except KeyError:
+                logging.debug("path {} is not mapped".format(k))
+                continue
+            for m in mapping:
+                hwcid = mapping[m]['hwcid']
+                msg = {}
+                if re.match(r"display\d+$", m):
+                    try:
+                        audio_meter = mapping[m]['audio_meter']
+                    except KeyError:
+                        pass
+                    else:
+                        try:
+                            data1 = v[mapping[m]['channels'][0]]
+                        except (KeyError, IndexError):
+                            data1 = None
+                        try:
+                            data2 = v[mapping[m]['channels'][1]]
+                        except (KeyError, IndexError):
+                            data2 = None
+                msg.update(await self._set_audio_meter(hwcid,
+                                                       data1=data1,
+                                                       data2=data2,
+                                                       **audio_meter))
+                msg = json.dumps(msg)
+                logging.debug(msg)
+                await self.send(msg)
+
+    async def _set_mode(self, hwcid, state=None,
+                        blink_pattern=None, output=False):
         msg = {
-            "HWCIDs": [hwid],
+            "HWCIDs": [hwcid],
+            "HWCMode": {}
+        }
+        if state:
+            msg["HWCMode"]["State"] = state
+        if blink_pattern:
+            msg["HWCMode"]["BlinkPattern"] = blink_pattern
+        if output:
+            msg["HWCMode"]["Output"] = True
+        return msg
+
+    async def _move_fader(self, hwcid, value):
+        msg = {
+            "HWCIDs": [hwcid],
             "HWCExtended": {
                 "Interpretation": 5
             }
         }
         if value:
             msg["HWCExtended"]["Value"] = value
-        await self.send(json.dumps(msg))
+        return msg
+
+    async def _set_color(self, hwcid, index=None, rgb=None):
+        if rgb:
+            color = {
+                "ColorRGB": rgb
+            }
+        elif index:
+            color = {
+                "ColorIndex": {
+                    "Index": index
+                }
+            }
+        else:
+            color = {
+                "ColorIndex": {}
+            }
+        msg = {
+            "HWCIDs": [hwcid],
+            "HWCColor": color
+        }
+        return msg
+
+    async def _set_text(self, hwcid, value1=None, title=None,
+                        solid_header=False, text1=None,
+                        formatting=7):
+        msg = {
+            "HWCIDs": [hwcid],
+            "HWCText": {}
+        }
+        if value1:
+            msg["HWCText"]["IntegerValue"] = value1
+        if title:
+            msg["HWCText"]["Title"] = title
+        if solid_header:
+            msg["HWCText"]["SolidHeaderBar"] = True
+        if text1 is not None:
+            msg["HWCText"]["TextLine1"] = str(text1)
+        if formatting:
+            msg["HWCText"]["Formatting"] = formatting
+        return msg
+
+    async def _set_audio_meter(self, hwcid, meter_type=1, mono=0,
+                               title=None, w=176, h=32,
+                               data1=None, peak1=None,
+                               data2=None, peak2=None):
+        msg = {
+            "HWCIDs": [hwcid],
+            "Processors": {
+                "Audiometer": {
+                    "MeterType": meter_type,
+                    "W": w,
+                    "H": h
+                }
+            }
+        }
+        if mono:
+            msg["Processors"]["Audiometer"]["Mono"] = mono
+        if title:
+            msg["Processors"]["Audiometer"]["Title"] = title
+        if data1:
+            msg["Processors"]["Audiometer"]["Data1"] = data1
+        if peak1:
+            msg["Processors"]["Audiometer"]["Peak1"] = peak1
+        if data2:
+            msg["Processors"]["Audiometer"]["Data2"] = data2
+        if peak2:
+            msg["Processors"]["Audiometer"]["Peak2"] = peak2
+        return msg

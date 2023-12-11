@@ -201,6 +201,7 @@ class DataStore(Store):
             s = await self.get(path)
         except KeyError:
             return "FAILURE"
+        # TODO: change to 'not' logic
         j = abs(s - 1)
         r = await self.set(path, j)
         if r.status_code == 204:
@@ -221,3 +222,9 @@ class Meters(Store):
             'meters': 'mix/gate:mix/comp:mix/level:mix/leveler:ext/input'
         }
         self.client_id = generate_client_id()
+
+    async def refresh(self, diff_check=None):
+        await super().refresh(diff_check=True)
+
+    async def poll(self, diff_check=None):
+        await super().poll(diff_check=True)

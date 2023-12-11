@@ -15,7 +15,8 @@ motu_ds = motu.DataStore()
 motu_ms = motu.Meters()
 skaarhoj_panel = raw_panel.RawPanel('waveboard')
 skaarhoj_panel.set_ds(motu_ds)
-motu_ds.set_change_handler(skaarhoj_panel.process_feedback)
+motu_ds.set_change_handler(skaarhoj_panel.process_data_feedback)
+motu_ms.set_change_handler(skaarhoj_panel.process_meters_feedback)
 
 app.asgi_app = MetricsMiddleware(app.asgi_app)
 app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
@@ -27,10 +28,10 @@ raw_db_range_mapping = raw_panel.raw_db_range_mapping
 async def startup():
     await skaarhoj_panel.connect()
     await motu_ds.refresh()
-    await motu_ms.refresh(diff_check=True)
+    await motu_ms.refresh()
     logging.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
-    app.add_background_task(motu_ms.poll, diff_check=True)
+    app.add_background_task(motu_ms.poll)
     app.add_background_task(skaarhoj_panel.handle_requests)
 
 
