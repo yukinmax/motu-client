@@ -126,7 +126,7 @@ feedback_map = {
         },
         'display3': {
             'hwcid': 39,
-            'channels': [4, 5],
+            'channels': [],
             'audio_meter': {
                 'mono': False,
                 'meter_type': 1,
