@@ -126,7 +126,7 @@ feedback_map = {
         },
         'display3': {
             'hwcid': 39,
-            'channels': [],
+            'channels': [4, 5],
             'audio_meter': {
                 'mono': False,
                 'meter_type': 1,
@@ -266,7 +266,8 @@ class RawPanel():
         self.connected = True
         logging.info("Connected to {}:{}.".format(self.host,
                                                   self.port))
-        await self.send('list')
+        hello_msg = {'FlowMessage': 'OutboundMessage_HELLO'}
+        await self.send(hello_msg)
         await asyncio.sleep(1)
         logging.info("Raw Panel {} initialized".format(self.host))
 
@@ -312,6 +313,8 @@ class RawPanel():
     async def send(self, message):
         if not self.connected:
             return
+        message = json.dumps(message, separators=(',', ':'))
+        logging.debug(message)
         self.writer.write('{}\n'.format(message).encode('ascii'))
         try:
             await self.writer.drain()
@@ -371,11 +374,10 @@ class RawPanel():
                     msg.update(await self._set_text(hwcid,
                                                     text1=db_value,
                                                     **txt))
-                msg = json.dumps(msg)
-                logging.debug(msg)
                 await self.send(msg)
 
     async def process_meters_feedback(self, d):
+        # Currently sends data for all meters even if only 1 meter data changed
         for k, v in d.items():
             try:
                 mapping = feedback_map[k]
@@ -399,12 +401,14 @@ class RawPanel():
                             data2 = v[mapping[m]['channels'][1]]
                         except (KeyError, IndexError):
                             data2 = None
+                        peak1 = data1
+                        peak2 = data2
                 msg.update(await self._set_audio_meter(hwcid,
                                                        data1=data1,
                                                        data2=data2,
+                                                       peak1=peak1,
+                                                       peak2=peak2,
                                                        **audio_meter))
-                msg = json.dumps(msg)
-                logging.debug(msg)
                 await self.send(msg)
 
     async def _set_mode(self, hwcid, state=None,
