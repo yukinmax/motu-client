@@ -148,6 +148,7 @@ class RawPanel():
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
+        self.connected = False
         self.reader = None
         self.writer = None
         self.sys_stat = None
@@ -262,6 +263,7 @@ class RawPanel():
             self.host,
             self.port
         )
+        self.connected = True
         logging.info("Connected to {}:{}.".format(self.host,
                                                   self.port))
         await self.send('list')
@@ -273,13 +275,18 @@ class RawPanel():
                                                              self.port))
         self.writer.close()
         await self.writer.wait_closed()
+        self.connected = False
 
     async def handle_request(self, request):
         try:
             key, value = request.split('=')
-        except:
-            logging.warn("Invalid request: {}".format(request))
-            return
+        except ValueError:
+            if len(request):
+                logging.warn("Invalid request: {}".format(request))
+            else:
+                logging.error("Connection to {} lost".format(self.host))
+                raise asyncio.CancelledError
+                return
         try:
             command, hwcid = key.split('#')
         except ValueError:
@@ -294,16 +301,22 @@ class RawPanel():
             return
 
     async def handle_requests(self):
-        while True:
+        while self.connected:
             try:
                 r = await self.receive()
                 await self.handle_request(r)
             except asyncio.CancelledError:
+                await self.disconnect()
                 break
 
     async def send(self, message):
+        if not self.connected:
+            return
         self.writer.write('{}\n'.format(message).encode('ascii'))
-        return await self.writer.drain()
+        try:
+            await self.writer.drain()
+        except ConnectionResetError:
+            logging.warn("Some messages were not delivered")
 
     async def receive(self):
         record = (await self.reader.readline()).decode().strip()
