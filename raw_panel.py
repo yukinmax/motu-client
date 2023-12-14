@@ -212,7 +212,13 @@ class RawPanel():
         self.info['support'] = value
 
     async def _update_isSleeping(self, value):
-        self.info['isSleeping'] = value
+        prev_state = self.info['isSleeping']
+        new_state = bool(int(value))
+        logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
+        self.info['isSleeping'] = new_state
+        if not new_state and prev_state:
+            await asyncio.sleep(0.5)
+            await self.init_feedback()
 
     async def _update_EnvironmentalHealth(self, value):
         self.info['EnvironmentalHealth'] = value
@@ -255,6 +261,34 @@ class RawPanel():
 
     def set_ms(self, meters):
         self.ms = meters
+
+    async def init_feedback(self):
+        if not self.ds:
+            logging.info("datastore should be set first")
+            return
+        if not self.ms:
+            logging.info("meters should be set first")
+            return
+        logging.info("Initializing the panel feedback")
+        dd = {}
+        md = {}
+        for path in feedback_map:
+            try:
+                v = await self.ds.get(path)
+            except KeyError:
+                try:
+                    v = await self.ms.get(path)
+                except KeyError:
+                    logging.warning("Path {} is not available")
+                    continue
+                else:
+                    md.update({path: v})
+            else:
+                dd.update({path: v})
+        logging.debug("Init datastore feedback {}".format(dd))
+        logging.debug("Init meters feedback {}".format(md))
+        await self.process_data_feedback(dd)
+        await self.process_meters_feedback(md)
 
     async def connect(self):
         logging.info("Connecting to {}:{}...".format(self.host,

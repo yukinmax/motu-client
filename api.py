@@ -15,6 +15,7 @@ motu_ds = motu.DataStore()
 motu_ms = motu.Meters()
 skaarhoj_panel = raw_panel.RawPanel('waveboard')
 skaarhoj_panel.set_ds(motu_ds)
+skaarhoj_panel.set_ms(motu_ms)
 motu_ds.set_change_handler(skaarhoj_panel.process_data_feedback)
 motu_ms.set_change_handler(skaarhoj_panel.process_meters_feedback)
 
