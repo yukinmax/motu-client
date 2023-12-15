@@ -165,6 +165,7 @@ class RawPanel():
             "isSleeping": None,
             "EnvironmenalHealth": None,
         }
+        self.panel_map = {}
         self.commands = {
             "SysStat": self._update_sys_stat,
             "_model": self._update_model,
@@ -177,6 +178,7 @@ class RawPanel():
             "_support": self._update_support,
             "_isSleeping": self._update_isSleeping,
             "EnvironmentalHealth": self._update_EnvironmentalHealth,
+            "map": self._update_map,
             "HWC": self._hardware_change
         }
         self.hw_change_timings = {}
@@ -222,6 +224,10 @@ class RawPanel():
 
     async def _update_EnvironmentalHealth(self, value):
         self.info['EnvironmentalHealth'] = value
+
+    async def _update_map(self, value):
+        k, v = value.split(":")
+        self.panel_map[k] = v
 
     async def _hardware_change(self, hwcid, value):
         try:
@@ -282,9 +288,9 @@ class RawPanel():
                     logging.warning("Path {} is not available")
                     continue
                 else:
-                    md.update({path: v})
+                    md[path] = v
             else:
-                dd.update({path: v})
+                dd[path] = v
         logging.debug("Init datastore feedback {}".format(dd))
         logging.debug("Init meters feedback {}".format(md))
         await self.process_data_feedback(dd)
