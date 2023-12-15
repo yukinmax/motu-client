@@ -25,12 +25,14 @@
     - ```pip install -r requirements.txt```
 
 ### TODO:
-- Fix the panel crash caused by meters feedback
-- Re-send relevant feedback to panel after it wakes up
++ Fix the panel crash caused by meters feedback
++ Re-send relevant feedback to panel after it wakes up
 - Implement panel health check with ping-ack
+- Implement panel reconnect/timeout logic
 - Use json-only messages from the panel
-- Strip whitespaces from json messages sent to the panel
++ Strip whitespaces from json messages sent to the panel
 - Implement proper post-fader level meters
 - Implement peaks for level meters
 - Add solo button handling
 - Implement protobuf for panel communication
+- Handle panel disconnect

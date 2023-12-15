@@ -36,23 +36,19 @@ async def startup():
     app.add_background_task(skaarhoj_panel.handle_requests)
 
 
-@app.route('/api/v1/panel/fader', methods=['GET'])
-async def fader():
-    try:
-        hwid = int(request.args['id'])
-    except KeyError():
-        return "Error: Fader ID is not provided"
-    try:
-        value = int(request.args['value'])
-    except KeyError():
-        value = None
-    await skaarhoj_panel.move_fader(hwid, value)
-    return 'OK'
-
-
 @app.route('/', methods=['GET'])
 async def home():
     return '<h1>MOTU API</h1>'
+
+
+@app.route('/api/v1/panel', methods=['POST'])
+async def panel_command():
+    try:
+        command = request.args['command']
+    except KeyError:
+        return "Error: No command provided. Please specify bus."
+    await skaarhoj_panel.send(command)
+    return 'OK'
 
 
 @app.route('/api/v1/motu/mute-toggle', methods=['GET'])
