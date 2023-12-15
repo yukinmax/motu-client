@@ -219,7 +219,7 @@ class RawPanel():
         logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
         self.info['isSleeping'] = new_state
         if not new_state and prev_state:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
             await self.init_feedback()
 
     async def _update_EnvironmentalHealth(self, value):
