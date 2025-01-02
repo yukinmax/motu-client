@@ -2,6 +2,11 @@ import requests as req
 import json
 import asyncio
 import random
+import math
+import logging
+
+
+level_range = (0, 10 ** (12 / 20))
 
 
 async def request(url, params=None, etag=None, method='GET', data=None):
@@ -25,37 +30,80 @@ async def request(url, params=None, etag=None, method='GET', data=None):
     return None
 
 
-def nested_set(dic, keys, value):
-    if len(keys) > 1:
-        dd = dic.setdefault(keys.pop(0), {})
-        nested_set(dd, keys, value)
+async def limit_to_range(value, minimum, maximum):
+    return max(min(value, maximum), minimum)
+
+
+async def level_to_db(value):
+    if value == 0:
+        return -math.inf
     else:
-        dic[keys.pop()] = value
+        return round(20 * math.log10(value), 2)
 
 
-def parse_response(json):
-    d = {}
-    for key in json:
-        keys = key.split('/')
+async def level_from_db(db_value):
+    db_value = float(db_value)
+    if db_value > 12:
+        db_value = 12
+    elif db_value < -120:
+        db_value = -math.inf
+    return 10 ** (db_value / 20)
+
+
+async def db_from_raw(value, range_mapping, reverse=False):
+    from_index = int(reverse)
+    to_index = int(not(reverse))
+    if reverse:
+        type_conversion = int
+    else:
+        type_conversion = float
+    try:
+        from_min_abs = range_mapping[0][from_index][0]
+        to_min_abs = range_mapping[0][to_index][0]
+    except TypeError:
+        from_min_abs = range_mapping[0][from_index]
+        to_min_abs = range_mapping[0][to_index]
+    try:
+        from_max_abs = range_mapping[-1][from_index][1]
+        to_max_abs = range_mapping[-1][to_index][1]
+    except TypeError:
+        from_max_abs = range_mapping[-1][from_index]
+        to_max_abs = range_mapping[-1][to_index]
+    value = await limit_to_range(value, from_min_abs, from_max_abs)
+    for i in range_mapping:
         try:
-            nested_set(d, keys, {'value': json[key]})
+            from_min = i[from_index][0]
+            from_max = i[from_index][1]
+            to_min = i[to_index][0]
+            to_max = i[to_index][1]
         except TypeError:
-            print(key)
-    return d
+            if value == i[from_index]:
+                return type_conversion(i[to_index])
+        else:
+            if from_min <= value < from_max:
+                break
+    cr = (to_max - to_min) / (from_max - from_min)
+    out_value = ((value - from_min) * cr) + to_min
+    out_value = await limit_to_range(out_value, to_min_abs, to_max_abs)
+    return type_conversion(out_value)
+
+
+async def dict_diff(d_old, d_new):
+    return dict(set(d_new.items()) - set(d_old.items()))
+
+
+async def dict_values_to_tuples(d):
+    d_new = {}
+    for k, v in d.items():
+        try:
+            d_new[k] = tuple(v)
+        except TypeError:
+            d_new[k] = v
+    return d_new
 
 
 def generate_client_id():
     return random.getrandbits(32)
-
-
-async def poll_all():
-    ds = DataStore()
-    ms = Meters()
-    await ds.refresh()
-    await ms.refresh()
-    async with asyncio.TaskGroup() as tg:
-        tg.create_task(ds.poll())
-        tg.create_task(ms.poll())
 
 
 class Store():
@@ -66,8 +114,9 @@ class Store():
         self.etag = None
         self.client_id = None
         self.data = {}
+        self.change_handler = None
 
-    async def refresh(self):
+    async def refresh(self, diff_check=False, handle_changes=True):
         url = 'http://{}/{}'.format(
             self.hostname,
             self.base_path
@@ -82,24 +131,39 @@ class Store():
             etag=self.etag
         )
         if response:
-            self.data.update(response.json())
+            if diff_check:
+                new_data = await dict_values_to_tuples(response.json())
+                data_diff = await dict_diff(self.data, new_data)
+            else:
+                data_diff = await dict_values_to_tuples(response.json())
             self.etag = response.headers['ETag']
-            # print("Modified: {}".format(self.base_path))
+            if data_diff:
+                self.data.update(data_diff)
+                logging.debug("Modified: {} -> {}".format(self.base_path,
+                                                          data_diff))
+                if self.change_handler and handle_changes:
+                    await self.change_handler(data_diff)
+                return data_diff
         else:
-            # print("Not Modified: {}".format(self.base_path))
-            pass
+            logging.debug("Not modified: {}".format(self.base_path))
 
     async def get(self, path):
         value = self.data[path]
         return value
 
-    async def poll(self):
+    async def poll(self, diff_check=False, handle_changes=True):
+        logging.info("Polling MOTU {} ({})...".format(self.base_path,
+                                                      self.hostname))
         while True:
             try:
-                await self.refresh()
+                await self.refresh(diff_check=diff_check,
+                                   handle_changes=handle_changes)
                 await asyncio.sleep(0)
             except asyncio.CancelledError:
                 break
+
+    def set_change_handler(self, handler):
+        self.change_handler = handler
 
 
 class DataStore(Store):
@@ -127,8 +191,12 @@ class DataStore(Store):
             data=data
         )
         if response:
-            self.data[path] = value
-            # print("Modified: {}".format(self.base_path))
+            data_diff = {path: value}
+            self.data.update(data_diff)
+            logging.debug("Modified: {} -> {}".format(self.base_path,
+                                                      data_diff))
+            if self.change_handler:
+                await self.change_handler({path: value})
         return response
 
     async def toggle(self, path):
@@ -136,6 +204,7 @@ class DataStore(Store):
             s = await self.get(path)
         except KeyError:
             return "FAILURE"
+        # TODO: change to 'not' logic
         j = abs(s - 1)
         r = await self.set(path, j)
         if r.status_code == 204:
@@ -153,10 +222,36 @@ class Meters(Store):
             super().__init__()
         self.base_path = 'meters'
         self.refresh_params = {
-            'meters': 'mix/gate:mix/comp:mix/level:mix/leveler:ext/input'
+            'meters': 'mix/level'
         }
         self.client_id = generate_client_id()
 
+    async def update_peaks(self):
+        filtered_data = {k: v for k, v in self.data.items()
+                         if not k.endswith('peaks')}
+        peaks = {
+            'mix/level/peaks':
+            tuple([max(values) for values in zip(*filtered_data.values())])
+        }
+        self.data.update(peaks)
+        logging.debug("Modified: {} -> {}".format(self.base_path, peaks))
+        return peaks
 
-if __name__ == '__main__':
-    asyncio.run(poll_all())
+    async def refresh(self, diff_check=True, handle_changes=True):
+        data_diff = await super().refresh(diff_check=diff_check,
+                                          handle_changes=False)
+        if data_diff:
+            data_diff.update(await self.update_peaks())
+            if self.change_handler and handle_changes:
+                await self.change_handler(data_diff)
+
+    async def poll(self, diff_check=True, handle_changes=True):
+        logging.info("Polling MOTU {} ({})...".format(self.base_path,
+                                                      self.hostname))
+        while True:
+            try:
+                await self.refresh(diff_check=diff_check,
+                                   handle_changes=handle_changes)
+                await asyncio.sleep(0)
+            except asyncio.CancelledError:
+                break
