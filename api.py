@@ -31,7 +31,6 @@ raw_db_range_mapping = raw_panel.raw_db_range_mapping
 @app.before_serving
 async def startup():
     await skaarhoj_panel.connect()
-    await skaarhoj_panel.initialize()
     await motu_ds.refresh()
     await motu_ms.refresh()
     logging.info("Initial data refresh has completed")
@@ -51,7 +50,7 @@ async def panel_command():
     try:
         command = request.args['command']
     except KeyError:
-        return "Error: No command provided. Please specify bus."
+        return "Error: No command provided."
     await skaarhoj_panel.send(command)
     return 'OK'
 

@@ -12,9 +12,26 @@ tmp_mapping = bidict({
     '13': 'mix/chan/0/matrix/aux/0/send',
     '14': 'mix/chan/2/matrix/aux/0/send',
     '15': 'mix/chan/4/matrix/aux/0/send',
+    '16': 'mix/chan/6/matrix/aux/0/send',
+    '17': 'mix/chan/8/matrix/aux/0/send',
+    '18': 'mix/group/0/matrix/main/0/send',
+    '19': 'mix/aux/0/matrix/fader',
+    '20': 'mix/main/0/matrix/fader',
     '61.4': 'mix/chan/0/matrix/mute',
     '64.4': 'mix/chan/2/matrix/mute',
     '67.4': 'mix/chan/4/matrix/mute',
+    '70.4': 'mix/chan/6/matrix/mute',
+    '73.4': 'mix/chan/8/matrix/mute',
+    '76.4': 'mix/group/0/matrix/mute',
+    '79.4': 'mix/aux/0/matrix/mute',
+    '82.4': 'mix/main/0/matrix/mute',
+    '62.1': 'mix/chan/0/matrix/solo',
+    '65.1': 'mix/chan/2/matrix/solo',
+    '68.1': 'mix/chan/4/matrix/solo',
+    '71.1': 'mix/chan/6/matrix/solo',
+    '74.1': 'mix/chan/8/matrix/solo',
+    '77.1': 'mix/group/0/matrix/solo',
+    '80.1': 'mix/monitor/0/override/0',
 })
 
 feedback_map = {
@@ -48,6 +65,127 @@ feedback_map = {
             },
             'color': {
                 'index': (4, 15)
+            }
+        }
+    },
+    'mix/chan/6/matrix/mute': {
+        'button': {
+            'hwcid': 70,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/chan/8/matrix/mute': {
+        'button': {
+            'hwcid': 73,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/group/0/matrix/mute': {
+        'button': {
+            'hwcid': 76,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/aux/0/matrix/mute': {
+        'button': {
+            'hwcid': 79,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/main/0/matrix/mute': {
+        'button': {
+            'hwcid': 82,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': (4, 15)
+            }
+        }
+    },
+    'mix/chan/0/matrix/solo': {
+        'button': {
+            'hwcid': 62,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
+            }
+        }
+    },
+    'mix/chan/2/matrix/solo': {
+        'button': {
+            'hwcid': 65,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
+            }
+        }
+    },
+    'mix/chan/4/matrix/solo': {
+        'button': {
+            'hwcid': 68,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
+            }
+        }
+    },
+    'mix/chan/6/matrix/solo': {
+        'button': {
+            'hwcid': 71,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
+            }
+        }
+    },
+    'mix/chan/8/matrix/solo': {
+        'button': {
+            'hwcid': 74,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
+            }
+        }
+    },
+    'mix/group/0/matrix/solo': {
+        'button': {
+            'hwcid': 77,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
             }
         }
     },
@@ -108,6 +246,113 @@ feedback_map = {
             }
         }
     },
+    'mix/chan/6/matrix/aux/0/send': {
+        'fader': {
+            'hwcid': 16,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 13
+            }
+        },
+        'display': {
+            'hwcid': 32,
+            'text': {
+                'formatting': 7,
+                'title': 'Comm',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/chan/8/matrix/aux/0/send': {
+        'fader': {
+            'hwcid': 17,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 13
+            }
+        },
+        'display': {
+            'hwcid': 33,
+            'text': {
+                'formatting': 7,
+                'title': 'Anlg',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/group/0/matrix/main/0/send': {
+        'fader': {
+            'hwcid': 18,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 7
+            }
+        },
+        'display': {
+            'hwcid': 34,
+            'text': {
+                'formatting': 7,
+                'title': 'VOD',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/aux/0/matrix/fader': {
+        'fader': {
+            'hwcid': 19,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 11
+            }
+        },
+        'display': {
+            'hwcid': 35,
+            'text': {
+                'formatting': 7,
+                'title': 'MyMix',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/main/0/matrix/fader': {
+        'fader': {
+            'hwcid': 20,
+            'mode': {
+                'state': 4
+            },
+            'color': {
+                'index': 11
+            }
+        },
+        'display': {
+            'hwcid': 36,
+            'text': {
+                'formatting': 7,
+                'title': 'Main',
+                'solid_header': True
+            }
+        }
+    },
+    'mix/monitor/0/override': {
+        'button1': {
+            'hwcid': 80,
+            'value': 1024,
+            'mode': {
+                'state': (4, 0)
+            },
+            'color': {
+                'index': (8, 0)
+            }
+        }
+    },
     'mix/level': {
         'display1': {
             'hwcid': 37,
@@ -141,6 +386,61 @@ feedback_map = {
                 'mono': False,
                 'meter_type': 1,
             }
+        },
+        'display4': {
+            'hwcid': 40,
+            'channels': [6, 7],
+            'pre_fader': False,
+            'fader_path': 'mix/chan/6/matrix/aux/0/send',
+            'mute_path': 'mix/chan/6/matrix/mute',
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
+        },
+        'display5': {
+            'hwcid': 41,
+            'channels': [8, 9],
+            'pre_fader': False,
+            'fader_path': 'mix/chan/8/matrix/aux/0/send',
+            'mute_path': 'mix/chan/8/matrix/mute',
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
+        },
+        'display6': {
+            'hwcid': 42,
+            'channels': [34, 35],
+            'pre_fader': False,
+            'fader_path': 'mix/group/0/matrix/main/0/send',
+            'mute_path': 'mix/group/0/matrix/mute',
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
+        },
+        'display7': {
+            'hwcid': 43,
+            'channels': [40, 41],
+            'pre_fader': False,
+            'fader_path': 'mix/aux/0/matrix/fader',
+            'mute_path': 'mix/aux/0/matrix/mute',
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
+        },
+        'display8': {
+            'hwcid': 44,
+            'channels': [38, 39],
+            'pre_fader': False,
+            'fader_path': 'mix/main/0/matrix/fader',
+            'mute_path': 'mix/main/0/matrix/mute',
+            'audio_meter': {
+                'mono': False,
+                'meter_type': 1,
+            }
         }
     }
 }
@@ -158,11 +458,14 @@ raw_db_range_mapping_meters = (
 
 
 class RawPanel():
-    def __init__(self, host, port=9923, mode='ASCII', delay=0.01):
+    def __init__(self, host, port=9923, mode='ASCII', delay=0.01,
+                 wakeup_interval=10):
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
         self.connected = False
+        self.connection_in_progress = False
+        self.disconnect_in_progress = False
         self.reader = None
         self.writer = None
         self.sys_stat = None
@@ -200,6 +503,8 @@ class RawPanel():
         self.hw_change_buffer = {}
         self.ds = None
         self.ms = None
+        self.last_wakeup_time = time.perf_counter()
+        self.wakeup_interval = wakeup_interval
 
     async def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -267,13 +572,14 @@ class RawPanel():
         except KeyError:
             logging.info("hwcid {} is not mapped".format(hwcid))
             return
-        path_type = re.search(r"\w+$", path)[0]
+        path_match = re.search(r"(\w+)\/?(\d*)$", path)
+        path_type = path_match.group(1)
         try:
             s, v = value.split(':')
         except ValueError:
             v = value
         logging.debug("hwcid {} is set to {}".format(hwcid, v))
-        if path_type in ('send',):
+        if path_type in ('send', 'fader'):
             try:
                 v = int(v)
             except ValueError:
@@ -284,10 +590,34 @@ class RawPanel():
             finally:
                 if self.ds:
                     await self.ds.set(path, v)
-        elif path_type in ('mute', 'solo'):
+        elif path_type in ('mute',):
             if re.match(r"Down", v):
                 if self.ds:
                     await self.ds.toggle(path)
+        elif path_type == 'solo':
+            if re.match(r"Down", v):
+                if self.ds:
+                    if await self.ds.get('mix/monitor/0/override') != -1.0:
+                        await self.ds.set(path, 1.0)
+                    else:
+                        await self.ds.toggle(path)
+                    await self.ds.set('mix/monitor/0/override', -1.0)
+        elif path_type in ('override',):
+            if re.match(r"Down", v):
+                if self.ds:
+                    try:
+                        override = 1024 + float(path_match.group(2))
+                    except ValueError:
+                        logging.warn("Configuration error for HWCID {}".format(
+                            hwcid,
+                        ))
+                        return
+                    else:
+                        path = os.path.dirname(path)
+                    if await self.ds.get(path) == override:
+                        await self.ds.set(path, -1.0)
+                    else:
+                        await self.ds.set(path, override)
 
     def set_ds(self, datastore):
         self.ds = datastore
@@ -326,16 +656,48 @@ class RawPanel():
         await self.process_data_feedback(dd)
         await self.process_meters_feedback(md)
 
-    async def connect(self):
+    async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
+        if self.connection_in_progress:
+            return
+        self.connection_in_progress = True
         logging.info("Connecting to {}:{}...".format(self.host,
                                                      self.port))
-        self.reader, self.writer = await asyncio.open_connection(
-            self.host,
-            self.port
-        )
-        self.connected = True
-        logging.info("Connected to {}:{}.".format(self.host,
-                                                  self.port))
+        attempt = 0
+        while not self.connected:
+            attempt += 1
+            try:
+                self.reader, self.writer = await asyncio.wait_for(
+                    asyncio.open_connection(
+                        self.host,
+                        self.port,
+                    ),
+                    timeout=timeout
+                )
+            except(ConnectionRefusedError, asyncio.TimeoutError):
+                if attempt > retries:
+                    logging.error(("Connection to {}:{} failed. "
+                                   "Maximum retries reached").format(
+                        self.host,
+                        self.port,
+                    ))
+                    self.connection_in_progress = False
+                    break
+                await asyncio.sleep(retry_interval_sec)
+                logging.debug("\tRetrying... {}/{}".format(
+                    attempt,
+                    retries,
+                ))
+            else:
+                self.connected = True
+                logging.info("Connected to {}:{} after {} attempts.".format(
+                    self.host,
+                    self.port,
+                    attempt,
+                ))
+                self.connection_in_progress = False
+                await self.initialize()
+                if self.info['isSleeping'] is not None:
+                    await self.init_feedback()
 
     async def initialize(self):
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
@@ -347,21 +709,38 @@ class RawPanel():
         logging.info("Raw Panel {} is initialized".format(self.host))
 
     async def disconnect(self):
+        self.disconnect_in_progress = True
         logging.info("Closing connection to {}:{}...".format(self.host,
                                                              self.port))
         self.writer.close()
         await self.writer.wait_closed()
         self.connected = False
+        self.disconnect_in_progress = False
+
+    async def handle_lost_connection(self):
+        if self.disconnect_in_progress or self.connection_in_progress:
+            return
+        self.disconnect_in_progress = True
+        logging.warn("Connection to {}:{} was lost".format(self.host,
+                                                           self.port))
+        self.writer = None
+        self.reader = None
+        self.connected = False
+        self.disconnect_in_progress = False
 
     async def handle_request(self, request):
         try:
             key, value = request.split('=')
+        except AttributeError:
+            logging.debug("Request is None")
+            return
         except ValueError:
             if not len(request):
-                logging.error("Connection to {} lost".format(self.host))
-                raise asyncio.CancelledError
+                logging.warn("Request is empty")
+                await self.handle_lost_connection()
                 return
             elif request == 'nack':
+                logging.warn("Request is 'nack'")
                 return
             else:
                 logging.warn("Invalid request: {}".format(request))
@@ -380,7 +759,7 @@ class RawPanel():
 
     async def process_buffers(self):
         logging.info("Processing buffered hardware changes...")
-        while self.connected:
+        while True:
             for hwid, v in self.hw_change_buffer.items():
                 t = time.perf_counter()
                 value = v['value']
@@ -393,28 +772,39 @@ class RawPanel():
 
     async def handle_requests(self):
         logging.info("Handling requests from the panel...")
-        while self.connected:
+        while True:
             try:
                 r = await self.receive()
                 await self.handle_request(r)
             except asyncio.CancelledError:
                 await self.disconnect()
                 break
+        logging.info("Requests from the panel are not handled anymore")
 
-    async def send(self, message):
+    async def send(self, message, timeout=10):
         if not self.connected:
             await self.connect()
+        while self.connection_in_progress or self.disconnect_in_progress:
+            await asyncio.sleep(5)
         message = json.dumps(message, separators=(',', ':'))
         logging.debug(message)
         self.writer.write('{}\n'.format(message).encode('ascii'))
         try:
-            await self.writer.drain()
-        except ConnectionResetError:
+            await asyncio.wait_for(self.writer.drain(), timeout=timeout)
+        except(ConnectionResetError, asyncio.TimeoutError):
             logging.warn("Message was not delivered: {}".format(message))
-            self.connected = False
+            await self.handle_lost_connection()
 
     async def receive(self):
-        raw_record = await self.reader.readline()
+        if not self.connected:
+            await self.connect()
+        while self.connection_in_progress or self.disconnect_in_progress:
+            await asyncio.sleep(5)
+        try:
+            raw_record = await self.reader.readline()
+        except ConnectionResetError:
+            await self.handle_lost_connection()
+            return
         try:
             record = raw_record.decode().strip()
         except UnicodeDecodeError as e:
@@ -432,7 +822,7 @@ class RawPanel():
                 logging.debug("path {} is not mapped".format(k))
                 continue
             t = re.search(r"\w+$", k)[0]
-            if t == 'send':
+            if t in ('send', 'fader'):
                 db_value = await motu.level_to_db(float(v))
                 raw_value = await motu.db_from_raw(
                     db_value,
@@ -442,12 +832,23 @@ class RawPanel():
             for m in mapping:
                 hwcid = mapping[m]['hwcid']
                 msg = {}
-                if m in ('button', 'fader'):
+                if m.startswith(('button', 'fader')):
                     try:
-                        mode = mapping[m]['mode']
+                        k = v == mapping[m]['value']
+                    except KeyError:
+                        k = v
+                    try:
+                        mode = mapping[m]['mode'].copy()
                     except KeyError:
                         pass
                     else:
+                        for mode_type, mode_value in mode.items():
+                            try:
+                                mode[mode_type] = (
+                                    mode_value[0] if k else mode_value[1]
+                                )
+                            except TypeError:
+                                pass
                         msg.update(await self._set_mode(hwcid, **mode))
                     try:
                         color = mapping[m]['color'].copy()
@@ -457,14 +858,14 @@ class RawPanel():
                         for color_type, color_value in color.items():
                             try:
                                 color[color_type] = (
-                                    color_value[0] if v else color_value[1]
+                                    color_value[0] if k else color_value[1]
                                 )
                             except TypeError:
                                 pass
                         msg.update(await self._set_color(hwcid, **color))
                 if m == 'fader':
                     msg.update(await self._move_fader(hwcid, raw_value))
-                if m == 'display':
+                elif m == 'display':
                     try:
                         txt = mapping[m]['text']
                     except KeyError:
@@ -476,9 +877,12 @@ class RawPanel():
 
     async def process_meters_feedback(self, d):
         # Currently sends data for all meters even if only 1 meter data changed
-        if self.info['isSleeping']:
+        t = time.perf_counter()
+        if self.info['isSleeping'] or \
+                t - self.last_wakeup_time >= self.wakeup_interval:
             wakeup_msg = [{'Command': {'WakeUp': True}}]
             await self.send(wakeup_msg)
+            self.last_wakeup_time = t
         msg = {}
         base_path = 'mix/level'
         try:
