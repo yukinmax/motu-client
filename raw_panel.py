@@ -8,7 +8,7 @@ import time
 import os.path
 from bidict import bidict
 
-tmp_mapping = bidict({
+tmp_mapping = {
     '13': {
         'path': 'mix/chan/0/matrix/aux/0/send',
     },
@@ -103,7 +103,7 @@ tmp_mapping = bidict({
     '84.4': {
         'path': 'mix/main/0/matrix/fader',
     },
-})
+}
 
 feedback_map = {
     'mix/chan/0/matrix/mute': {
