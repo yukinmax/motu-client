@@ -9,29 +9,100 @@ import os.path
 from bidict import bidict
 
 tmp_mapping = bidict({
-    '13': 'mix/chan/0/matrix/aux/0/send',
-    '14': 'mix/chan/2/matrix/aux/0/send',
-    '15': 'mix/chan/4/matrix/aux/0/send',
-    '16': 'mix/chan/6/matrix/aux/0/send',
-    '17': 'mix/chan/8/matrix/aux/0/send',
-    '18': 'mix/group/0/matrix/main/0/send',
-    '19': 'mix/aux/0/matrix/fader',
-    '20': 'mix/main/0/matrix/fader',
-    '61.4': 'mix/chan/0/matrix/mute',
-    '64.4': 'mix/chan/2/matrix/mute',
-    '67.4': 'mix/chan/4/matrix/mute',
-    '70.4': 'mix/chan/6/matrix/mute',
-    '73.4': 'mix/chan/8/matrix/mute',
-    '76.4': 'mix/group/0/matrix/mute',
-    '79.4': 'mix/aux/0/matrix/mute',
-    '82.4': 'mix/main/0/matrix/mute',
-    '62.1': 'mix/chan/0/matrix/solo',
-    '65.1': 'mix/chan/2/matrix/solo',
-    '68.1': 'mix/chan/4/matrix/solo',
-    '71.1': 'mix/chan/6/matrix/solo',
-    '74.1': 'mix/chan/8/matrix/solo',
-    '77.1': 'mix/group/0/matrix/solo',
-    '80.1': 'mix/monitor/0/override/0',
+    '13': {
+        'path': 'mix/chan/0/matrix/aux/0/send',
+    },
+    '14': {
+        'path': 'mix/chan/2/matrix/aux/0/send',
+    },
+    '15': {
+        'path': 'mix/chan/4/matrix/aux/0/send',
+    },
+    '16': {
+        'path': 'mix/chan/6/matrix/aux/0/send',
+    },
+    '17': {
+        'path': 'mix/chan/8/matrix/aux/0/send',
+    },
+    '18': {
+        'path': 'mix/group/0/matrix/main/0/send',
+    },
+    '19': {
+        'path': 'mix/aux/0/matrix/fader',
+    },
+    '20': {
+        'path': 'mix/main/0/matrix/fader',
+    },
+    '61.4': {
+        'path': 'mix/chan/0/matrix/mute',
+    },
+    '64.4': {
+        'path': 'mix/chan/2/matrix/mute',
+    },
+    '67.4': {
+        'path': 'mix/chan/4/matrix/mute',
+    },
+    '70.4': {
+        'path': 'mix/chan/6/matrix/mute',
+    },
+    '73.4': {
+        'path': 'mix/chan/8/matrix/mute',
+    },
+    '76.4': {
+        'path': 'mix/group/0/matrix/mute',
+    },
+    '79.4': {
+        'path': 'mix/aux/0/matrix/mute',
+    },
+    '82.4': {
+        'path': 'mix/main/0/matrix/mute',
+    },
+    '62.1': {
+        'path': 'mix/chan/0/matrix/solo',
+    },
+    '65.1': {
+        'path': 'mix/chan/2/matrix/solo',
+    },
+    '68.1': {
+        'path': 'mix/chan/4/matrix/solo',
+    },
+    '71.1': {
+        'path': 'mix/chan/6/matrix/solo',
+    },
+    '74.1': {
+        'path': 'mix/chan/8/matrix/solo',
+    },
+    '77.1': {
+        'path': 'mix/group/0/matrix/solo',
+    },
+    '80.1': {
+        'path': 'mix/monitor/0/override/0',
+    },
+    '63.4': {
+        'path': 'mix/chan/0/matrix/aux/0/send',
+        'default_level': -5.0,
+    },
+    '66.4': {
+        'path': 'mix/chan/2/matrix/aux/0/send',
+    },
+    '69.4': {
+        'path': 'mix/chan/4/matrix/aux/0/send',
+    },
+    '72.4': {
+        'path': 'mix/chan/6/matrix/aux/0/send',
+    },
+    '75.4': {
+        'path': 'mix/chan/8/matrix/aux/0/send',
+    },
+    '78.4': {
+        'path': 'mix/group/0/matrix/main/0/send',
+    },
+    '81.4': {
+        'path': 'mix/aux/0/matrix/fader',
+    },
+    '84.4': {
+        'path': 'mix/main/0/matrix/fader',
+    },
 })
 
 feedback_map = {
@@ -568,7 +639,7 @@ class RawPanel():
 
     async def _hardware_change_process(self, hwcid, value):
         try:
-            path = tmp_mapping[hwcid]
+            path = tmp_mapping[hwcid]['path']
         except KeyError:
             logging.info("hwcid {} is not mapped".format(hwcid))
             return
@@ -583,7 +654,21 @@ class RawPanel():
             try:
                 v = int(v)
             except ValueError:
-                pass
+                if re.match(r"Down", v):
+                    cv = await self.ds.get(path)
+                    try:
+                        dv = tmp_mapping[hwcid]['default_level']
+                    except KeyError:
+                        logging.debug(
+                            "no default value for hwcid {}".format(hwcid)
+                        )
+                    else:
+                        dv = await motu.level_from_db(dv)
+                        if cv != dv:
+                            await self.ds.set(path, dv)
+                            return
+                    if cv != 1:
+                        await self.ds.set(path, 1)
             else:
                 v = await motu.db_from_raw(v, raw_db_range_mapping)
                 v = await motu.level_from_db(v)
