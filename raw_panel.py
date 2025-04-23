@@ -674,9 +674,8 @@ class RawPanel():
             else:
                 v = await motu.db_from_raw(v, raw_db_range_mapping)
                 v = await motu.level_from_db(v)
-            finally:
-                if self.ds:
-                    await self.ds.set(path, v)
+            if self.ds:
+                await self.ds.set(path, v)
         elif path_type in ('mute',):
             if re.match(r"Down", v):
                 if self.ds:
