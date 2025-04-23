@@ -665,10 +665,9 @@ class RawPanel():
                     else:
                         dv = await motu.level_from_db(dv)
                         if cv != dv:
-                            await self.ds.set(path, dv)
-                            return
+                            v = dv
                     if cv != 1:
-                        await self.ds.set(path, 1)
+                        v = 1
             else:
                 v = await motu.db_from_raw(v, raw_db_range_mapping)
                 v = await motu.level_from_db(v)
