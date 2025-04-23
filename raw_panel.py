@@ -6,7 +6,6 @@ import logging
 import motu
 import time
 import os.path
-from bidict import bidict
 
 tmp_mapping = {
     '13': {
@@ -84,9 +83,11 @@ tmp_mapping = {
     },
     '66.4': {
         'path': 'mix/chan/2/matrix/aux/0/send',
+        'default_level': -10.0,
     },
     '69.4': {
         'path': 'mix/chan/4/matrix/aux/0/send',
+        'default_level': -20.0,
     },
     '72.4': {
         'path': 'mix/chan/6/matrix/aux/0/send',
