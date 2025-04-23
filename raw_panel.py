@@ -655,19 +655,20 @@ class RawPanel():
                 v = int(v)
             except ValueError:
                 if re.match(r"Down", v):
-                    cv = await self.ds.get(path)
+                    v = await self.ds.get(path)
                     try:
                         dv = tmp_mapping[hwcid]['default_level']
                     except KeyError:
                         logging.debug(
                             "no default value for hwcid {}".format(hwcid)
                         )
+                        v = 1
                     else:
                         dv = await motu.level_from_db(dv)
-                        if cv != dv:
+                        if v != dv:
                             v = dv
-                    if cv != 1:
-                        v = 1
+                        else:
+                            v = 1
             else:
                 v = await motu.db_from_raw(v, raw_db_range_mapping)
                 v = await motu.level_from_db(v)
