@@ -669,6 +669,8 @@ class RawPanel():
                             v = dv
                         else:
                             v = 1
+                else:
+                    return
             else:
                 v = await motu.db_from_raw(v, raw_db_range_mapping)
                 v = await motu.level_from_db(v)
