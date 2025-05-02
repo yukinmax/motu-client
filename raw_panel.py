@@ -824,7 +824,7 @@ class RawPanel():
         except ValueError:
             if not len(request):
                 logging.warn("Request is empty")
-                # await self.handle_lost_connection()
+                await self.handle_lost_connection()
                 return
             elif request == 'nack':
                 logging.warn("Request is 'nack'")
