@@ -531,7 +531,7 @@ raw_db_range_mapping_meters = (
 
 class RawPanel():
     def __init__(self, host, port=9923, mode='ASCII', delay=0.01,
-                 wakeup_interval=10):
+                 sleep_timeout=0):
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
@@ -542,6 +542,7 @@ class RawPanel():
         self.writer = None
         self.sys_stat = None
         self.delay = delay
+        self.sleep_timeout = sleep_timeout
         self.info = {
             "model": None,
             "serial": None,
@@ -575,8 +576,6 @@ class RawPanel():
         self.hw_change_buffer = {}
         self.ds = None
         self.ms = None
-        self.last_wakeup_time = time.perf_counter()
-        self.wakeup_interval = wakeup_interval
 
     async def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -791,7 +790,7 @@ class RawPanel():
         await self.send(hello_msg)
         s_t_msg = await self._get_sleep_timeout()
         await self.send(s_t_msg)
-        s_t_msg = await self._set_sleep_timeout(600*1000)
+        s_t_msg = await self._set_sleep_timeout(self.sleep_timeout)
         await self.send(s_t_msg)
         logging.info("Raw Panel {} is initialized".format(self.host))
 
@@ -964,12 +963,9 @@ class RawPanel():
 
     async def process_meters_feedback(self, d):
         # Currently sends data for all meters even if only 1 meter data changed
-        t = time.perf_counter()
-        if self.info['isSleeping'] or \
-                t - self.last_wakeup_time >= self.wakeup_interval:
+        if self.info['isSleeping']:
             wakeup_msg = [{'Command': {'WakeUp': True}}]
             await self.send(wakeup_msg)
-            self.last_wakeup_time = t
         msg = {}
         base_path = 'mix/level'
         try:

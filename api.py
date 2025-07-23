@@ -16,7 +16,9 @@ app = Quart('MOTU API')
 app.config["DEBUG"] = True
 motu_ds = motu.DataStore('ultralite-avb.ynet')
 motu_ms = motu.Meters('ultralite-avb.ynet')
-skaarhoj_panel = raw_panel.RawPanel('waveboard.ynet', delay=0.001)
+skaarhoj_panel = raw_panel.RawPanel('waveboard.ynet',
+                                    delay=0.001,
+                                    sleep_timeout=600000)
 skaarhoj_panel.set_ds(motu_ds)
 skaarhoj_panel.set_ms(motu_ms)
 motu_ds.set_change_handler(skaarhoj_panel.process_data_feedback)
