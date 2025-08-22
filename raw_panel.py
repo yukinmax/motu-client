@@ -840,6 +840,8 @@ class RawPanel():
     async def reset_panel_sleep(self):
         s_t_msg = await self._set_sleep_timeout(0)
         await self.send(s_t_msg)
+        wakeup_msg = [{'Command': {'WakeUp': True}}]
+        await self.send(wakeup_msg)
 
     async def handle_sleep_timeout(self):
         while True:
@@ -1001,8 +1003,6 @@ class RawPanel():
         self.last_activity = time.perf_counter()
         if self.info['isSleeping']:
             await self.reset_panel_sleep()
-            wakeup_msg = [{'Command': {'WakeUp': True}}]
-            await self.send(wakeup_msg)
         msg = {}
         base_path = 'mix/level'
         try:
