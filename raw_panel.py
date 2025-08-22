@@ -844,8 +844,9 @@ class RawPanel():
     async def handle_sleep_timeout(self):
         while True:
             t = time.perf_counter()
-            if self.last_activity + self.sleep_timeout <= t:
-                await self.set_panel_sleep()
+            if not self.info['isSleeping']:
+                if self.last_activity + self.sleep_timeout <= t:
+                    await self.set_panel_sleep()
             await asyncio.sleep(1)
 
     async def handle_request(self, request):
