@@ -632,7 +632,7 @@ class RawPanel():
             sleep_timer_str = f"{prev_state} -> {new_state}"
         else:
             sleep_timer_str = f"{new_state}"
-            logging.debug(f"Internal Panel Sleep Timer: {sleep_timer_str}")
+            logging.info(f"Internal Panel Sleep Timer: {sleep_timer_str}")
         self.info['panel_sleep_timeout'] = new_state
 
     async def _update_EnvironmentalHealth(self, value):
@@ -835,7 +835,7 @@ class RawPanel():
         while True:
             t = time.perf_counter()
             if self.last_activity + self.sleep_timeout <= t:
-                s_t_msg = self._set_sleep_timeout(1000)
+                s_t_msg = await self._set_sleep_timeout(1000)
                 await self.send(s_t_msg)
             await asyncio.sleep(1)
 
