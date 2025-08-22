@@ -613,7 +613,7 @@ class RawPanel():
         logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
         self.info['isSleeping'] = new_state
         if not new_state and (prev_state or prev_state is None):
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.1)
             await self.init_feedback()
 
     async def _update_panel_sleep_timeout(self, value):
@@ -759,7 +759,7 @@ class RawPanel():
                     ),
                     timeout=timeout
                 )
-            except(ConnectionRefusedError, asyncio.TimeoutError):
+            except (ConnectionRefusedError, asyncio.TimeoutError):
                 if attempt > retries:
                     logging.error(("Connection to {}:{} failed. "
                                    "Maximum retries reached").format(
@@ -783,7 +783,8 @@ class RawPanel():
                 self.connection_in_progress = False
                 await self.initialize()
                 if self.info['isSleeping'] is not None:
-                    await self.init_feedback()
+                    logging.info("Would init feedback, but skipping")
+                    # await self.init_feedback()
 
     async def initialize(self):
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
@@ -877,7 +878,7 @@ class RawPanel():
         self.writer.write('{}\n'.format(message).encode('ascii'))
         try:
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-        except(ConnectionResetError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.TimeoutError):
             logging.warn("Message was not delivered: {}".format(message))
             await self.handle_lost_connection()
 
@@ -1064,7 +1065,7 @@ class RawPanel():
                 await self.send(msg)
 
     async def _level_to_raw(self, value, range_mapping, multiplier=1):
-        db = await motu.level_to_db(float(value*multiplier/1000))
+        db = await motu.level_to_db(float(value * multiplier / 1000))
         return await motu.db_from_raw(db, range_mapping, reverse=True)
 
     async def _get_sleep_timeout(self):
