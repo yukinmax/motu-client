@@ -645,7 +645,7 @@ class RawPanel():
     async def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
         self.last_activity = t
-        if self.info['isSleeping']:
+        if self.info['isSleeping'] or self.info['panel_sleep_timeout']:
             await self.reset_panel_sleep()
         change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
                                                           'value': None})
@@ -840,7 +840,6 @@ class RawPanel():
     async def reset_panel_sleep(self):
         s_t_msg = await self._set_sleep_timeout(0)
         await self.send(s_t_msg)
-        await asyncio.sleep(0.5)
         wakeup_msg = [{'Command': {'WakeUp': True}}]
         await self.send(wakeup_msg)
 
@@ -850,6 +849,7 @@ class RawPanel():
             if not self.info['isSleeping']:
                 if self.last_activity + self.sleep_timeout <= t:
                     await self.set_panel_sleep()
+                    await asyncio.sleep(10)
             await asyncio.sleep(1)
 
     async def handle_request(self, request):
@@ -1002,7 +1002,7 @@ class RawPanel():
     async def process_meters_feedback(self, d):
         # Currently sends data for all meters even if only 1 meter data changed
         self.last_activity = time.perf_counter()
-        if self.info['isSleeping']:
+        if self.info['isSleeping'] or self.info['panel_sleep_timeout']:
             await self.reset_panel_sleep()
         msg = {}
         base_path = 'mix/level'
