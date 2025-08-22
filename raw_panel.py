@@ -612,7 +612,7 @@ class RawPanel():
             return
         logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
         self.info['isSleeping'] = new_state
-        if not new_state and (prev_state or prev_state in None):
+        if not new_state and (prev_state or prev_state is None):
             # Init the panel feedback only after panels wakes up
             # or initializes
             await asyncio.sleep(0.1)
