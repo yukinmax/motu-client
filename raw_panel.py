@@ -791,6 +791,7 @@ class RawPanel():
         await self.send(s_t_msg)
         s_t_msg = await self._set_sleep_timeout(self.sleep_timeout)
         await self.send(s_t_msg)
+        await asyncio.sleep(1)
         await self.init_feedback()
         logging.info("Raw Panel {} is initialized".format(self.host))
 
