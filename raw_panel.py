@@ -645,13 +645,12 @@ class RawPanel():
     async def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
         self.last_activity = t
-        if self.info['isSleeping'] or self.info['panel_sleep_timeout']:
-            await self.reset_panel_sleep()
         change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
                                                           'value': None})
         change['value'] = value
 
     async def _hardware_change_process(self, hwcid, value):
+        await self.reset_panel_sleep()
         try:
             path = tmp_mapping[hwcid]['path']
         except KeyError:
@@ -802,8 +801,7 @@ class RawPanel():
         await self.send(hello_msg)
         s_t_msg = await self._get_sleep_timeout()
         await self.send(s_t_msg)
-        s_t_msg = await self._set_sleep_timeout(0)
-        await self.send(s_t_msg)
+        await self.reset_panel_sleep()
         #  TODO: Figure out a way to only log this after response is
         #  received from the panel
         logging.info("Raw Panel {} is initialized".format(self.host))
@@ -838,10 +836,12 @@ class RawPanel():
         await self.send(s_t_msg)
 
     async def reset_panel_sleep(self):
-        s_t_msg = await self._set_sleep_timeout(0)
-        await self.send(s_t_msg)
-        wakeup_msg = [{'Command': {'WakeUp': True}}]
-        await self.send(wakeup_msg)
+        if self.info['panel_sleep_timeout']:
+            s_t_msg = await self._set_sleep_timeout(0)
+            await self.send(s_t_msg)
+        if self.info['isSleeping']:
+            wakeup_msg = [{'Command': {'WakeUp': True}}]
+            await self.send(wakeup_msg)
 
     async def handle_sleep_timeout(self):
         while True:
@@ -1002,8 +1002,7 @@ class RawPanel():
     async def process_meters_feedback(self, d):
         # Currently sends data for all meters even if only 1 meter data changed
         self.last_activity = time.perf_counter()
-        if self.info['isSleeping'] or self.info['panel_sleep_timeout']:
-            await self.reset_panel_sleep()
+        await self.reset_panel_sleep()
         msg = {}
         base_path = 'mix/level'
         try:
