@@ -576,6 +576,7 @@ class RawPanel():
         self.hw_change_buffer = {}
         self.ds = None
         self.ms = None
+        self.last_activity = time.perf_counter()
 
     async def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -610,12 +611,16 @@ class RawPanel():
         new_state = bool(int(value))
         if new_state == prev_state:
             return
-        logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
+        if prev_state is not None:
+            sleep_state_str = f"{prev_state} -> {new_state}"
+        else:
+            sleep_state_str = f"{new_state}"
+        logging.info(f"Sleeping: {sleep_state_str}")
         self.info['isSleeping'] = new_state
         if not new_state and (prev_state or prev_state is None):
             # Init the panel feedback only after panels wakes up
             # or initializes
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)
             await self.init_feedback()
 
     async def _update_panel_sleep_timeout(self, value):
@@ -623,7 +628,11 @@ class RawPanel():
         new_state = int(value)
         if new_state == prev_state:
             return
-        logging.info("Sleep Timer: {} -> {}".format(prev_state, new_state))
+        if prev_state is not None:
+            sleep_timer_str = f"{prev_state} -> {new_state}"
+        else:
+            sleep_timer_str = f"{new_state}"
+            logging.debug(f"Internal Panel Sleep Timer: {sleep_timer_str}")
         self.info['panel_sleep_timeout'] = new_state
 
     async def _update_EnvironmentalHealth(self, value):
@@ -635,6 +644,7 @@ class RawPanel():
 
     async def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
+        self.last_activity = t
         change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
                                                           'value': None})
         change['value'] = value
@@ -790,7 +800,7 @@ class RawPanel():
         await self.send(hello_msg)
         s_t_msg = await self._get_sleep_timeout()
         await self.send(s_t_msg)
-        s_t_msg = await self._set_sleep_timeout(self.sleep_timeout)
+        s_t_msg = await self._set_sleep_timeout(0)
         await self.send(s_t_msg)
         #  TODO: Figure out a way to only log this after response is
         #  received from the panel
@@ -820,6 +830,14 @@ class RawPanel():
         self.connected = False
         await self.purge_panel_info()
         self.disconnect_in_progress = False
+
+    async def handle_sleep_timeout(self):
+        while True:
+            t = time.perf_counter()
+            if self.last_activity + self.sleep_timeout <= t:
+                s_t_msg = self._set_sleep_timeout(1000)
+                await self.send(s_t_msg)
+            await asyncio.sleep(1)
 
     async def handle_request(self, request):
         try:
@@ -970,6 +988,7 @@ class RawPanel():
 
     async def process_meters_feedback(self, d):
         # Currently sends data for all meters even if only 1 meter data changed
+        self.last_activity = time.perf_counter()
         if self.info['isSleeping']:
             wakeup_msg = [{'Command': {'WakeUp': True}}]
             await self.send(wakeup_msg)
