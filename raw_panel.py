@@ -632,7 +632,7 @@ class RawPanel():
             sleep_timer_str = f"{prev_state} -> {new_state}"
         else:
             sleep_timer_str = f"{new_state}"
-            logging.info(f"Internal Panel Sleep Timer: {sleep_timer_str}")
+        logging.info(f"Internal Panel Sleep Timer: {sleep_timer_str}")
         self.info['panel_sleep_timeout'] = new_state
 
     async def _update_EnvironmentalHealth(self, value):
