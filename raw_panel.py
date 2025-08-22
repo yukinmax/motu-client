@@ -612,8 +612,9 @@ class RawPanel():
             return
         logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
         self.info['isSleeping'] = new_state
-        if not new_state and (prev_state):
+        if not new_state and (prev_state or prev_state in None):
             # Init the panel feedback only after panels wakes up
+            # or initializes
             await asyncio.sleep(0.1)
             await self.init_feedback()
 
@@ -791,7 +792,8 @@ class RawPanel():
         await self.send(s_t_msg)
         s_t_msg = await self._set_sleep_timeout(self.sleep_timeout)
         await self.send(s_t_msg)
-        await self.init_feedback()
+        #  TODO: Figure out a way to only log this after response is
+        #  received from the panel
         logging.info("Raw Panel {} is initialized".format(self.host))
 
     async def disconnect(self):
@@ -803,6 +805,10 @@ class RawPanel():
         self.connected = False
         self.disconnect_in_progress = False
 
+    async def purge_panel_info(self):
+        for key in self.info:
+            self.info[key] = None
+
     async def handle_lost_connection(self):
         if self.disconnect_in_progress or self.connection_in_progress:
             return
@@ -812,6 +818,7 @@ class RawPanel():
         self.writer = None
         self.reader = None
         self.connected = False
+        await self.purge_panel_info()
         self.disconnect_in_progress = False
 
     async def handle_request(self, request):
