@@ -834,7 +834,7 @@ class RawPanel():
         self.disconnect_in_progress = False
 
     async def set_panel_sleep(self):
-        s_t_msg = await self._set_sleep_timeout(5000)
+        s_t_msg = await self._set_sleep_timeout(1)
         await self.send(s_t_msg)
 
     async def reset_panel_sleep(self):
