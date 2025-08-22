@@ -32,14 +32,16 @@ raw_db_range_mapping = raw_panel.raw_db_range_mapping
 
 @app.before_serving
 async def startup():
+    app.add_background_task(skaarhoj_panel.handle_requests)
+    app.add_background_task(skaarhoj_panel.process_buffers)
     await skaarhoj_panel.connect()
     await motu_ds.refresh()
     await motu_ms.refresh()
     logging.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
     app.add_background_task(motu_ms.poll)
-    app.add_background_task(skaarhoj_panel.handle_requests)
-    app.add_background_task(skaarhoj_panel.process_buffers)
+    # app.add_background_task(skaarhoj_panel.handle_requests)
+    # app.add_background_task(skaarhoj_panel.process_buffers)
 
 
 @app.route('/', methods=['GET'])
