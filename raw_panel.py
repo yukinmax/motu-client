@@ -801,6 +801,7 @@ class RawPanel():
         await self.send(hello_msg)
         s_t_msg = await self._get_sleep_timeout()
         await self.send(s_t_msg)
+        await asyncio.sleep(1)
         await self.reset_panel_sleep()
         #  TODO: Figure out a way to only log this after response is
         #  received from the panel
