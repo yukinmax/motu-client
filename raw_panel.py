@@ -832,13 +832,13 @@ class RawPanel():
         self.disconnect_in_progress = False
 
     async def set_panel_sleep(self):
-        s_t_msg = await self._set_sleep_timeout(1)
+        s_t_msg = await self._set_sleep_timeout(1)  # 1s
         await self.send(s_t_msg)
 
     async def reset_panel_sleep(self):
         if self.info['panel_sleep_timeout'] or \
            self.info['panel_sleep_timeout'] is None:
-            s_t_msg = await self._set_sleep_timeout(0)
+            s_t_msg = await self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
             await self.send(s_t_msg)
         if self.info['isSleeping']:
             wakeup_msg = [{'Command': {'WakeUp': True}}]
