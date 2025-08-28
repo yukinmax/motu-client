@@ -6,33 +6,105 @@ import logging
 import motu
 import time
 import os.path
-from bidict import bidict
 
-tmp_mapping = bidict({
-    '13': 'mix/chan/0/matrix/aux/0/send',
-    '14': 'mix/chan/2/matrix/aux/0/send',
-    '15': 'mix/chan/4/matrix/aux/0/send',
-    '16': 'mix/chan/6/matrix/aux/0/send',
-    '17': 'mix/chan/8/matrix/aux/0/send',
-    '18': 'mix/group/0/matrix/main/0/send',
-    '19': 'mix/aux/0/matrix/fader',
-    '20': 'mix/main/0/matrix/fader',
-    '61.4': 'mix/chan/0/matrix/mute',
-    '64.4': 'mix/chan/2/matrix/mute',
-    '67.4': 'mix/chan/4/matrix/mute',
-    '70.4': 'mix/chan/6/matrix/mute',
-    '73.4': 'mix/chan/8/matrix/mute',
-    '76.4': 'mix/group/0/matrix/mute',
-    '79.4': 'mix/aux/0/matrix/mute',
-    '82.4': 'mix/main/0/matrix/mute',
-    '62.1': 'mix/chan/0/matrix/solo',
-    '65.1': 'mix/chan/2/matrix/solo',
-    '68.1': 'mix/chan/4/matrix/solo',
-    '71.1': 'mix/chan/6/matrix/solo',
-    '74.1': 'mix/chan/8/matrix/solo',
-    '77.1': 'mix/group/0/matrix/solo',
-    '80.1': 'mix/monitor/0/override/0',
-})
+tmp_mapping = {
+    '13': {
+        'path': 'mix/chan/0/matrix/aux/0/send',
+    },
+    '14': {
+        'path': 'mix/chan/2/matrix/aux/0/send',
+    },
+    '15': {
+        'path': 'mix/chan/4/matrix/aux/0/send',
+    },
+    '16': {
+        'path': 'mix/chan/6/matrix/aux/0/send',
+    },
+    '17': {
+        'path': 'mix/chan/8/matrix/aux/0/send',
+    },
+    '18': {
+        'path': 'mix/group/0/matrix/main/0/send',
+    },
+    '19': {
+        'path': 'mix/aux/0/matrix/fader',
+    },
+    '20': {
+        'path': 'mix/main/0/matrix/fader',
+    },
+    '61.4': {
+        'path': 'mix/chan/0/matrix/mute',
+    },
+    '64.4': {
+        'path': 'mix/chan/2/matrix/mute',
+    },
+    '67.4': {
+        'path': 'mix/chan/4/matrix/mute',
+    },
+    '70.4': {
+        'path': 'mix/chan/6/matrix/mute',
+    },
+    '73.4': {
+        'path': 'mix/chan/8/matrix/mute',
+    },
+    '76.4': {
+        'path': 'mix/group/0/matrix/mute',
+    },
+    '79.4': {
+        'path': 'mix/aux/0/matrix/mute',
+    },
+    '82.4': {
+        'path': 'mix/main/0/matrix/mute',
+    },
+    '62.1': {
+        'path': 'mix/chan/0/matrix/solo',
+    },
+    '65.1': {
+        'path': 'mix/chan/2/matrix/solo',
+    },
+    '68.1': {
+        'path': 'mix/chan/4/matrix/solo',
+    },
+    '71.1': {
+        'path': 'mix/chan/6/matrix/solo',
+    },
+    '74.1': {
+        'path': 'mix/chan/8/matrix/solo',
+    },
+    '77.1': {
+        'path': 'mix/group/0/matrix/solo',
+    },
+    '80.1': {
+        'path': 'mix/monitor/0/override/0',
+    },
+    '63.4': {
+        'path': 'mix/chan/0/matrix/aux/0/send',
+        'default_level': -5.0,
+    },
+    '66.4': {
+        'path': 'mix/chan/2/matrix/aux/0/send',
+        'default_level': -10.0,
+    },
+    '69.4': {
+        'path': 'mix/chan/4/matrix/aux/0/send',
+        'default_level': -20.0,
+    },
+    '72.4': {
+        'path': 'mix/chan/6/matrix/aux/0/send',
+    },
+    '75.4': {
+        'path': 'mix/chan/8/matrix/aux/0/send',
+    },
+    '78.4': {
+        'path': 'mix/group/0/matrix/main/0/send',
+    },
+    '81.4': {
+        'path': 'mix/aux/0/matrix/fader',
+    },
+    '84.4': {
+        'path': 'mix/main/0/matrix/fader',
+    },
+}
 
 feedback_map = {
     'mix/chan/0/matrix/mute': {
@@ -459,7 +531,7 @@ raw_db_range_mapping_meters = (
 
 class RawPanel():
     def __init__(self, host, port=9923, mode='ASCII', delay=0.01,
-                 wakeup_interval=10):
+                 sleep_timeout=0):
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
@@ -470,6 +542,7 @@ class RawPanel():
         self.writer = None
         self.sys_stat = None
         self.delay = delay
+        self.sleep_timeout = sleep_timeout
         self.info = {
             "model": None,
             "serial": None,
@@ -503,8 +576,7 @@ class RawPanel():
         self.hw_change_buffer = {}
         self.ds = None
         self.ms = None
-        self.last_wakeup_time = time.perf_counter()
-        self.wakeup_interval = wakeup_interval
+        self.last_activity = time.perf_counter()
 
     async def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -539,9 +611,15 @@ class RawPanel():
         new_state = bool(int(value))
         if new_state == prev_state:
             return
-        logging.info("Sleeping: {} -> {}".format(prev_state, new_state))
+        if prev_state is not None:
+            sleep_state_str = f"{prev_state} -> {new_state}"
+        else:
+            sleep_state_str = f"{new_state}"
+        logging.info(f"Sleeping: {sleep_state_str}")
         self.info['isSleeping'] = new_state
         if not new_state and (prev_state or prev_state is None):
+            # Init the panel feedback only after panels wakes up
+            # or initializes
             await asyncio.sleep(0.5)
             await self.init_feedback()
 
@@ -550,7 +628,11 @@ class RawPanel():
         new_state = int(value)
         if new_state == prev_state:
             return
-        logging.info("Sleep Timer: {} -> {}".format(prev_state, new_state))
+        if prev_state is not None:
+            sleep_timer_str = f"{prev_state} -> {new_state}"
+        else:
+            sleep_timer_str = f"{new_state}"
+        logging.info(f"Internal Panel Sleep Timer: {sleep_timer_str}")
         self.info['panel_sleep_timeout'] = new_state
 
     async def _update_EnvironmentalHealth(self, value):
@@ -562,13 +644,15 @@ class RawPanel():
 
     async def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
+        self.last_activity = t
         change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
                                                           'value': None})
         change['value'] = value
 
     async def _hardware_change_process(self, hwcid, value):
+        await self.reset_panel_sleep()
         try:
-            path = tmp_mapping[hwcid]
+            path = tmp_mapping[hwcid]['path']
         except KeyError:
             logging.info("hwcid {} is not mapped".format(hwcid))
             return
@@ -583,13 +667,28 @@ class RawPanel():
             try:
                 v = int(v)
             except ValueError:
-                pass
+                if re.match(r"Down", v):
+                    v = await self.ds.get(path)
+                    try:
+                        dv = tmp_mapping[hwcid]['default_level']
+                    except KeyError:
+                        logging.debug(
+                            "no default value for hwcid {}".format(hwcid)
+                        )
+                        v = 1
+                    else:
+                        dv = await motu.level_from_db(dv)
+                        if v != dv:
+                            v = dv
+                        else:
+                            v = 1
+                else:
+                    return
             else:
                 v = await motu.db_from_raw(v, raw_db_range_mapping)
                 v = await motu.level_from_db(v)
-            finally:
-                if self.ds:
-                    await self.ds.set(path, v)
+            if self.ds:
+                await self.ds.set(path, v)
         elif path_type in ('mute',):
             if re.match(r"Down", v):
                 if self.ds:
@@ -673,7 +772,7 @@ class RawPanel():
                     ),
                     timeout=timeout
                 )
-            except(ConnectionRefusedError, asyncio.TimeoutError):
+            except (ConnectionRefusedError, asyncio.TimeoutError):
                 if attempt > retries:
                     logging.error(("Connection to {}:{} failed. "
                                    "Maximum retries reached").format(
@@ -696,16 +795,15 @@ class RawPanel():
                 ))
                 self.connection_in_progress = False
                 await self.initialize()
-                if self.info['isSleeping'] is not None:
-                    await self.init_feedback()
 
     async def initialize(self):
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
         await self.send(hello_msg)
         s_t_msg = await self._get_sleep_timeout()
         await self.send(s_t_msg)
-        s_t_msg = await self._set_sleep_timeout(600*1000)
-        await self.send(s_t_msg)
+        await self.reset_panel_sleep()
+        #  TODO: Figure out a way to only log this after response is
+        #  received from the panel
         logging.info("Raw Panel {} is initialized".format(self.host))
 
     async def disconnect(self):
@@ -717,6 +815,10 @@ class RawPanel():
         self.connected = False
         self.disconnect_in_progress = False
 
+    async def purge_panel_info(self):
+        for key in self.info:
+            self.info[key] = None
+
     async def handle_lost_connection(self):
         if self.disconnect_in_progress or self.connection_in_progress:
             return
@@ -726,7 +828,30 @@ class RawPanel():
         self.writer = None
         self.reader = None
         self.connected = False
+        await self.purge_panel_info()
         self.disconnect_in_progress = False
+
+    async def set_panel_sleep(self):
+        s_t_msg = await self._set_sleep_timeout(1)  # 1s
+        await self.send(s_t_msg)
+
+    async def reset_panel_sleep(self):
+        if self.info['panel_sleep_timeout'] or \
+           self.info['panel_sleep_timeout'] is None:
+            s_t_msg = await self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
+            await self.send(s_t_msg)
+        if self.info['isSleeping']:
+            wakeup_msg = [{'Command': {'WakeUp': True}}]
+            await self.send(wakeup_msg)
+
+    async def handle_sleep_timeout(self):
+        while True:
+            t = time.perf_counter()
+            if not self.info['isSleeping']:
+                if self.last_activity + self.sleep_timeout <= t:
+                    await self.set_panel_sleep()
+                    await asyncio.sleep(10)
+            await asyncio.sleep(1)
 
     async def handle_request(self, request):
         try:
@@ -791,7 +916,7 @@ class RawPanel():
         self.writer.write('{}\n'.format(message).encode('ascii'))
         try:
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-        except(ConnectionResetError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.TimeoutError):
             logging.warn("Message was not delivered: {}".format(message))
             await self.handle_lost_connection()
 
@@ -877,12 +1002,8 @@ class RawPanel():
 
     async def process_meters_feedback(self, d):
         # Currently sends data for all meters even if only 1 meter data changed
-        t = time.perf_counter()
-        if self.info['isSleeping'] or \
-                t - self.last_wakeup_time >= self.wakeup_interval:
-            wakeup_msg = [{'Command': {'WakeUp': True}}]
-            await self.send(wakeup_msg)
-            self.last_wakeup_time = t
+        self.last_activity = time.perf_counter()
+        await self.reset_panel_sleep()
         msg = {}
         base_path = 'mix/level'
         try:
@@ -981,7 +1102,7 @@ class RawPanel():
                 await self.send(msg)
 
     async def _level_to_raw(self, value, range_mapping, multiplier=1):
-        db = await motu.level_to_db(float(value*multiplier/1000))
+        db = await motu.level_to_db(float(value * multiplier / 1000))
         return await motu.db_from_raw(db, range_mapping, reverse=True)
 
     async def _get_sleep_timeout(self):

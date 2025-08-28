@@ -28,6 +28,7 @@
 + Fix the panel crash caused by meters feedback
 + Re-send relevant feedback to panel after it wakes up
 + Adjust sleep timeout
++ Implement external panel sleep timeout
 + Implement proper fader send accuracy
 - Implement panel health check with ping-ack
 + Implement panel reconnect/timeout logic
@@ -35,6 +36,7 @@
 + Strip whitespaces from json messages sent to the panel
 + Implement proper post-fader level meters
 + Implement peaks for level meters
-- Add solo button handling
++ Add solo button handling
 - Implement protobuf for panel communication
-- Handle panel disconnect
++ Handle panel disconnect
+- Implement appropriate application shutdown without any leaking resources

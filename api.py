@@ -16,7 +16,9 @@ app = Quart('MOTU API')
 app.config["DEBUG"] = True
 motu_ds = motu.DataStore('ultralite-avb.ynet')
 motu_ms = motu.Meters('ultralite-avb.ynet')
-skaarhoj_panel = raw_panel.RawPanel('waveboard.ynet', delay=0.001)
+skaarhoj_panel = raw_panel.RawPanel('waveboard.ynet',
+                                    delay=0.001,
+                                    sleep_timeout=600)
 skaarhoj_panel.set_ds(motu_ds)
 skaarhoj_panel.set_ms(motu_ms)
 motu_ds.set_change_handler(skaarhoj_panel.process_data_feedback)
@@ -30,14 +32,17 @@ raw_db_range_mapping = raw_panel.raw_db_range_mapping
 
 @app.before_serving
 async def startup():
+    app.add_background_task(skaarhoj_panel.handle_requests)
+    app.add_background_task(skaarhoj_panel.process_buffers)
+    app.add_background_task(skaarhoj_panel.handle_sleep_timeout)
     await skaarhoj_panel.connect()
     await motu_ds.refresh()
     await motu_ms.refresh()
     logging.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
     app.add_background_task(motu_ms.poll)
-    app.add_background_task(skaarhoj_panel.handle_requests)
-    app.add_background_task(skaarhoj_panel.process_buffers)
+    # app.add_background_task(skaarhoj_panel.handle_requests)
+    # app.add_background_task(skaarhoj_panel.process_buffers)
 
 
 @app.route('/', methods=['GET'])
