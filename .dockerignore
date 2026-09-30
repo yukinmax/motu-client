@@ -1,0 +1,13 @@
+# Git and IDEs
+.git
+.gitignore
+.vscode/
+.idea/
+
+# Python environment and caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
