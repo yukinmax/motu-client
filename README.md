@@ -40,3 +40,4 @@
 - [ ] Implement protobuf for panel communication
 - [x] Handle panel disconnect
 - [ ] Implement appropriate application shutdown without any leaking resources
+- [ ] Create Dockerfile and streamline the deployment
