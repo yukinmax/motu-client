@@ -27,7 +27,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy your actual application code
 COPY ./src /app
 
-# 7. Use a non-root user for security
+# Use a non-root user for security
 RUN adduser -D -S -u 8888 motu && chown -R motu /app
 USER motu
 
