@@ -6,6 +6,7 @@ WORKDIR /app
 ENV UV_PYTHON=python3.11
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
+ENV UV_PROJECT_ENVIRONMENT="/usr/local"
 
 # 1. Cache and install dependencies first (leverages Docker layer caching)
 RUN --mount=type=cache,target=/root/.cache/uv \
