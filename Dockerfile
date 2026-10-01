@@ -1,5 +1,5 @@
 # --- Stage 1: Build dependencies ---
-FROM astralsh/uv:python3.11-alpine AS builder
+FROM ghcr.io/astral-sh/uv:python3.11-alpine AS builder
 
 # Set working directory and configure environment variables
 WORKDIR /app
