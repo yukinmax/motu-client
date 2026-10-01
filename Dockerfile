@@ -34,4 +34,4 @@ USER motu
 # Expose ports or define execution entry points
 EXPOSE 5000
 ENTRYPOINT ["hypercorn", "api:app"]
-CMD ["--bind", "0.0.0.0:5000", "startup_timeout", "600"]
+CMD ["--bind", "0.0.0.0:5000"]
