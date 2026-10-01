@@ -28,7 +28,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY ./src /app
 
 # 7. Use a non-root user for security
-RUN useradd -u 8888 motu && chown -R motu /app
+RUN adduser -u 8888 motu && chown -R motu /app
 USER appuser
 
 # Expose ports or define execution entry points
