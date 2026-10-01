@@ -28,8 +28,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY ./src /app
 
 # 7. Use a non-root user for security
-RUN adduser -u 8888 motu && chown -R motu /app
-USER appuser
+RUN adduser -D -S -u 8888 motu && chown -R motu /app
+USER motu
 
 # Expose ports or define execution entry points
 EXPOSE 5000
