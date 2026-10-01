@@ -1,4 +1,0 @@
-requests
-quart
-aioprometheus[quart]
-bidict
