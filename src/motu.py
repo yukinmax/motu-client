@@ -12,40 +12,36 @@ level_range = (0, 10 ** (12 / 20))
 async def request(url, params=None, etag=None, method='GET', data=None,
                   retries=None, retry_interval_sec=10):
     headers = {}
-    attempt = 0
     if etag:
         headers['If-None-Match'] = etag
     if method == 'PATCH':
         headers['Content-Type'] = 'application/x-www-form-urlencoded'
+
+    attempt = 0
     while True:
         attempt += 1
         try:
-            r = await asyncio.to_thread(req.request,
-                                        method,
-                                        url,
-                                        params=params,
-                                        headers=headers,
-                                        data=data)
-        except(req.exceptions.ConnectionError):
-            logging.warn("Error connecting to {}".format(url))
+            r = await asyncio.to_thread(
+                req.request,
+                method,
+                url,
+                params=params,
+                headers=headers,
+                data=data
+            )
+            break
+        except req.exceptions.ConnectionError:
+            logging.warning("Error connecting to %s", url)
             if retries is not None and attempt > retries:
-                logging.error(("Maximum retries reached "
-                               "connecting to {}".format(url)))
-                r = {
-                    'status_code': 503,
-                    'reason': "Service Unavailable"
-                }
-                break
+                logging.error("Maximum retries reached connecting to %s", url)
+                return None
             else:
                 await asyncio.sleep(retry_interval_sec)
-        else:
-            break
+
     if r.status_code in (200, 204):
         return r
     elif r.status_code != 304:
-        print('Error code {} - {}'.format(r.status_code, r.reason))
-    else:
-        pass
+        logging.error("Error code %s - %s", r.status_code, r.reason)
     return None
 
 
