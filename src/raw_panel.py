@@ -770,7 +770,7 @@ class RawPanel():
                     timeout=timeout
                 )
             except (ConnectionRefusedError, asyncio.TimeoutError):
-                if attempt > retries:
+                if retries is not None and attempt > retries:
                     logger.error(
                         "Connection to %s:%s failed. Maximum retries reached",
                         self.host,
