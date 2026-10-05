@@ -145,7 +145,7 @@ class Store():
             params=params,
             etag=self.etag
         )
-        if response:
+        if response is not None:
             if diff_check:
                 new_data = await dict_values_to_tuples(response.json())
                 data_diff = await dict_diff(self.data, new_data)
@@ -203,9 +203,10 @@ class DataStore(Store):
             url=url,
             params=params,
             method='PATCH',
-            data=data
+            data=data,
+            retries=1
         )
-        if response:
+        if response is not None:
             data_diff = {path: value}
             self.data.update(data_diff)
             logging.debug("Modified: {} -> {}".format(self.base_path,
@@ -221,10 +222,10 @@ class DataStore(Store):
             return "FAILURE"
         j = float(not(s))
         r = await self.set(path, j)
-        if r.status_code == 204:
+        if r is not None and r.status_code == 204:
             return j
         else:
-            print("FAILURE")
+            logging.error("Failed to toggle %s", path)
             return "FAILURE"
 
 
