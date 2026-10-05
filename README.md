@@ -20,3 +20,5 @@
 - [ ] Implement appropriate application shutdown without any leaking resources
 - [x] Create Dockerfile and streamline the deployment
 - [ ] Implement config file
+- [ ] Decouple API service, MOTU connection handling and Skaarhoj Panel connection handling
+- [ ] Replace requests with aiohttp
