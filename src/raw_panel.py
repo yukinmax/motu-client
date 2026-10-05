@@ -769,17 +769,28 @@ class RawPanel():
                     ),
                     timeout=timeout
                 )
-            except (ConnectionRefusedError, asyncio.TimeoutError):
+            except (ConnectionRefusedError, asyncio.TimeoutError) as e:
+                logger.warning(
+                    "Connection to %s:%s failed (%s)",
+                    self.host,
+                    self.port,
+                    type(e).__name__,
+                )
+                logger.debug("%s", e)
                 if retries is not None and attempt > retries:
                     logger.error(
-                        "Connection to %s:%s failed. Maximum retries reached",
+                        "Maximum retries reached for %s:%s",
                         self.host,
                         self.port,
                     )
                     self.connection_in_progress = False
                     break
                 await asyncio.sleep(retry_interval_sec)
-                logger.debug("\tRetrying... %s/%s", attempt, retries)
+                logger.debug(
+                    "\tRetrying... %s/%s",
+                    attempt,
+                    float('inf') if retries is None else retries,
+                )
             else:
                 self.connected = True
                 logger.info(
@@ -901,7 +912,7 @@ class RawPanel():
 
     async def send(self, message, timeout=10):
         if not self.connected:
-            await self.connect()
+            await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
             await asyncio.sleep(5)
         if not self.connected:
@@ -917,7 +928,7 @@ class RawPanel():
 
     async def receive(self):
         if not self.connected:
-            await self.connect()
+            await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
             await asyncio.sleep(5)
         if not self.connected:
