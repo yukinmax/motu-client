@@ -1,16 +1,39 @@
 from quart import Quart, request
 import json
 import logging
+import os
 from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
 import motu
 import raw_panel
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
-level = logger.getEffectiveLevel()
-level_str = logging.getLevelName(level)
-logging.info("Setting LOGLEVEL to {}".format(level_str))
+
+_VALID_LOG_LEVELS = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+}
+
+log_level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+if log_level_name in _VALID_LOG_LEVELS:
+    log_level = _VALID_LOG_LEVELS[log_level_name]
+else:
+    log_level = logging.INFO
+
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
+if log_level_name not in _VALID_LOG_LEVELS:
+    logger.warning(
+        "Invalid LOG_LEVEL=%r; falling back to INFO",
+        log_level_name
+    )
 
 app = Quart('MOTU API')
 app.config["DEBUG"] = True
@@ -38,7 +61,7 @@ async def startup():
     await skaarhoj_panel.connect()
     await motu_ds.refresh()
     await motu_ms.refresh()
-    logging.info("Initial data refresh has completed")
+    logger.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
     app.add_background_task(motu_ms.poll)
     # app.add_background_task(skaarhoj_panel.handle_requests)
