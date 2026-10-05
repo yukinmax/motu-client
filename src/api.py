@@ -24,7 +24,7 @@ else:
 
 logging.basicConfig(
     level=log_level,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    format="%(levelname)s [%(name)s] %(message)s",
 )
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,13 @@ if log_level_name not in _VALID_LOG_LEVELS:
         "Invalid LOG_LEVEL=%r; falling back to INFO",
         log_level_name
     )
+
+# Avoid duplicate lines from library loggers that installed their own handlers
+for name in ("hypercorn", "hypercorn.error",
+             "hypercorn.access", "quart", "asyncio"):
+    lib_logger = logging.getLogger(name)
+    lib_logger.handlers.clear()
+    lib_logger.propagate = True
 
 app = Quart('MOTU API')
 app.config["DEBUG"] = True
