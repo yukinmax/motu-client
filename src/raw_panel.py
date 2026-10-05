@@ -769,7 +769,7 @@ class RawPanel():
                     ),
                     timeout=timeout
                 )
-            except (ConnectionRefusedError, asyncio.TimeoutError) as e:
+            except (ConnectionRefusedError, OSError, TimeoutError) as e:
                 logger.warning(
                     "Connection to %s:%s failed (%s)",
                     self.host,
@@ -922,8 +922,13 @@ class RawPanel():
         self.writer.write('{}\n'.format(message).encode('ascii'))
         try:
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-        except (ConnectionResetError, asyncio.TimeoutError):
-            logger.warning("Message was not delivered: %s", message)
+        except (ConnectionResetError, OSError, TimeoutError) as e:
+            logger.warning(
+                "Message was not delivered: %s (%s)",
+                message,
+                type(e).__name__,
+            )
+            logger.debug("%s", e)
             await self.handle_lost_connection()
 
     async def receive(self):
@@ -935,7 +940,12 @@ class RawPanel():
             return
         try:
             raw_record = await self.reader.readline()
-        except (ConnectionResetError, asyncio.TimeoutError):
+        except (ConnectionResetError, OSError, TimeoutError) as e:
+            logger.warning(
+                "Request listner was interrupted (%s)",
+                type(e).__name__,
+            )
+            logger.debug("%s", e)
             await self.handle_lost_connection()
             return
         try:
