@@ -35,13 +35,6 @@ if log_level_name not in _VALID_LOG_LEVELS:
         log_level_name
     )
 
-# Avoid duplicate lines from library loggers that installed their own handlers
-for name in ("hypercorn", "hypercorn.error",
-             "hypercorn.access", "quart", "asyncio"):
-    lib_logger = logging.getLogger(name)
-    lib_logger.handlers.clear()
-    lib_logger.propagate = True
-
 app = Quart('MOTU API')
 app.config["DEBUG"] = True
 motu_ds = motu.DataStore('ultralite-avb.ynet')
