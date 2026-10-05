@@ -1,0 +1,10 @@
+version = 1
+disable_existing_loggers = false
+
+[loggers."hypercorn.error"]
+handlers = []
+propagate = true
+
+[loggers."hypercorn.access"]
+handlers = []
+propagate = true
