@@ -10,7 +10,7 @@ level_range = (0, 10 ** (12 / 20))
 
 
 async def request(url, params=None, etag=None, method='GET', data=None,
-                  retries=None, retry_interval_sec=10):
+                  retries=None, retry_interval_sec=10, timeout=None):
     headers = {}
     if etag:
         headers['If-None-Match'] = etag
@@ -27,11 +27,17 @@ async def request(url, params=None, etag=None, method='GET', data=None,
                 url,
                 params=params,
                 headers=headers,
-                data=data
+                data=data,
+                timeout=timeout
             )
             break
-        except req.exceptions.ConnectionError:
-            logging.warning("Error connecting to %s", url)
+        except req.exceptions.RequestException as e:
+            logging.warning(
+                "Request to %s failed (%s): %s",
+                url,
+                type(e).__name__,
+                e,
+            )
             if retries is not None and attempt > retries:
                 logging.error("Maximum retries reached connecting to %s", url)
                 return None
@@ -204,7 +210,8 @@ class DataStore(Store):
             params=params,
             method='PATCH',
             data=data,
-            retries=1
+            retries=1,
+            timeout=5
         )
         if response is not None:
             data_diff = {path: value}
