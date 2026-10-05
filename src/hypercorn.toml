@@ -1,0 +1,13 @@
+startup_timeout = 500
+
+[logconfig_dict]
+version = 1
+disable_existing_loggers = false
+
+[logconfig_dict.loggers."hypercorn.error"]
+handlers = []
+propagate = true
+
+[logconfig_dict.loggers."hypercorn.access"]
+handlers = []
+propagate = true
