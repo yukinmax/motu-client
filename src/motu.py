@@ -151,7 +151,8 @@ class Store():
         response = await request(
             url=url,
             params=params,
-            etag=self.etag
+            etag=self.etag,
+            timeout=20,  # MOTU Long Polling wait period is 15s
         )
         if response is not None:
             if diff_check:
