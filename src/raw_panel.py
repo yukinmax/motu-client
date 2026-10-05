@@ -904,6 +904,8 @@ class RawPanel():
             await self.connect()
         while self.connection_in_progress or self.disconnect_in_progress:
             await asyncio.sleep(5)
+        if not self.connected:
+            return
         message = json.dumps(message, separators=(',', ':'))
         logger.debug(message)
         self.writer.write('{}\n'.format(message).encode('ascii'))
@@ -918,9 +920,11 @@ class RawPanel():
             await self.connect()
         while self.connection_in_progress or self.disconnect_in_progress:
             await asyncio.sleep(5)
+        if not self.connected:
+            return
         try:
             raw_record = await self.reader.readline()
-        except ConnectionResetError:
+        except (ConnectionResetError, asyncio.TimeoutError):
             await self.handle_lost_connection()
             return
         try:
