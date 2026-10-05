@@ -7,6 +7,9 @@ import motu
 import time
 import os.path
 
+
+logger = logging.getLogger(__name__)
+
 tmp_mapping = {
     '13': {
         'path': 'mix/chan/0/matrix/aux/0/send',
@@ -580,7 +583,7 @@ class RawPanel():
 
     async def _update_sys_stat(self, value):
         self.sys_stat = value
-        logging.debug("Updated System Stats")
+        logger.debug("Updated System Stats")
 
     async def _update_model(self, value):
         self.info['model'] = value
@@ -615,7 +618,7 @@ class RawPanel():
             sleep_state_str = f"{prev_state} -> {new_state}"
         else:
             sleep_state_str = f"{new_state}"
-        logging.info(f"Sleeping: {sleep_state_str}")
+        logger.info("Sleeping: %s", sleep_state_str)
         self.info['isSleeping'] = new_state
         if not new_state and (prev_state or prev_state is None):
             # Init the panel feedback only after panels wakes up
@@ -632,7 +635,7 @@ class RawPanel():
             sleep_timer_str = f"{prev_state} -> {new_state}"
         else:
             sleep_timer_str = f"{new_state}"
-        logging.info(f"Internal Panel Sleep Timer: {sleep_timer_str}")
+        logger.info("Internal Panel Sleep Timer: %s", sleep_timer_str)
         self.info['panel_sleep_timeout'] = new_state
 
     async def _update_EnvironmentalHealth(self, value):
@@ -654,7 +657,7 @@ class RawPanel():
         try:
             path = tmp_mapping[hwcid]['path']
         except KeyError:
-            logging.info("hwcid {} is not mapped".format(hwcid))
+            logger.debug("hwcid %s is not mapped", hwcid)
             return
         path_match = re.search(r"(\w+)\/?(\d*)$", path)
         path_type = path_match.group(1)
@@ -662,7 +665,7 @@ class RawPanel():
             s, v = value.split(':')
         except ValueError:
             v = value
-        logging.debug("hwcid {} is set to {}".format(hwcid, v))
+        logger.debug("hwcid %s is set to %s", hwcid, v)
         if path_type in ('send', 'fader'):
             try:
                 v = int(v)
@@ -672,9 +675,7 @@ class RawPanel():
                     try:
                         dv = tmp_mapping[hwcid]['default_level']
                     except KeyError:
-                        logging.debug(
-                            "no default value for hwcid {}".format(hwcid)
-                        )
+                        logger.debug("No default value for hwcid %s", hwcid)
                         v = 1
                     else:
                         dv = await motu.level_from_db(dv)
@@ -707,9 +708,8 @@ class RawPanel():
                     try:
                         override = 1024 + float(path_match.group(2))
                     except ValueError:
-                        logging.warn("Configuration error for HWCID {}".format(
-                            hwcid,
-                        ))
+                        logger.warning("Configuration error for HWCID %s",
+                                       hwcid)
                         return
                     else:
                         path = os.path.dirname(path)
@@ -726,12 +726,12 @@ class RawPanel():
 
     async def init_feedback(self):
         if not self.ds:
-            logging.warn("datastore should be set first")
+            logger.warning("Datastore should be set first")
             return
         if not self.ms:
-            logging.warn("meters should be set first")
+            logger.warning("Meters should be set first")
             return
-        logging.info("Initializing the panel feedback")
+        logger.info("Initializing the panel feedback")
         dd = {}
         md = {}
         for path in feedback_map:
@@ -742,16 +742,14 @@ class RawPanel():
                     try:
                         v = await self.ms.get(os.path.join(path, i))
                     except KeyError:
-                        logging.warning("Path {} is not available".format(
-                            path
-                        ))
+                        logger.warning("Path %s is not available", path)
                         continue
                     else:
                         md[path] = v
             else:
                 dd[path] = v
-        logging.debug("Init datastore feedback {}".format(dd))
-        logging.debug("Init meters feedback {}".format(md))
+        logger.debug("Init datastore feedback %s", dd)
+        logger.debug("Init meters feedback %s", md)
         await self.process_data_feedback(dd)
         await self.process_meters_feedback(md)
 
@@ -759,8 +757,7 @@ class RawPanel():
         if self.connection_in_progress:
             return
         self.connection_in_progress = True
-        logging.info("Connecting to {}:{}...".format(self.host,
-                                                     self.port))
+        logger.info("Connecting to %s:%s...", self.host, self.port)
         attempt = 0
         while not self.connected:
             attempt += 1
@@ -772,27 +769,36 @@ class RawPanel():
                     ),
                     timeout=timeout
                 )
-            except (ConnectionRefusedError, asyncio.TimeoutError):
-                if attempt > retries:
-                    logging.error(("Connection to {}:{} failed. "
-                                   "Maximum retries reached").format(
+            except (ConnectionRefusedError, OSError, TimeoutError) as e:
+                logger.warning(
+                    "Connection to %s:%s failed (%s)",
+                    self.host,
+                    self.port,
+                    type(e).__name__,
+                )
+                logger.debug("%s", e)
+                if retries is not None and attempt > retries:
+                    logger.error(
+                        "Maximum retries reached for %s:%s",
                         self.host,
                         self.port,
-                    ))
+                    )
                     self.connection_in_progress = False
                     break
                 await asyncio.sleep(retry_interval_sec)
-                logging.debug("\tRetrying... {}/{}".format(
+                logger.debug(
+                    "\tRetrying... %s/%s",
                     attempt,
-                    retries,
-                ))
+                    float('inf') if retries is None else retries,
+                )
             else:
                 self.connected = True
-                logging.info("Connected to {}:{} after {} attempts.".format(
+                logger.info(
+                    "Connected to %s:%s after %s attempts.",
                     self.host,
                     self.port,
                     attempt,
-                ))
+                )
                 self.connection_in_progress = False
                 await self.initialize()
 
@@ -804,12 +810,11 @@ class RawPanel():
         await self.reset_panel_sleep()
         #  TODO: Figure out a way to only log this after response is
         #  received from the panel
-        logging.info("Raw Panel {} is initialized".format(self.host))
+        logger.info("Raw Panel %s is initialized", self.host)
 
     async def disconnect(self):
         self.disconnect_in_progress = True
-        logging.info("Closing connection to {}:{}...".format(self.host,
-                                                             self.port))
+        logger.info("Closing connection to %s:%s...", self.host, self.port)
         self.writer.close()
         await self.writer.wait_closed()
         self.connected = False
@@ -823,8 +828,7 @@ class RawPanel():
         if self.disconnect_in_progress or self.connection_in_progress:
             return
         self.disconnect_in_progress = True
-        logging.warn("Connection to {}:{} was lost".format(self.host,
-                                                           self.port))
+        logger.warning("Connection to %s:%s was lost", self.host, self.port)
         self.writer = None
         self.reader = None
         self.connected = False
@@ -857,18 +861,18 @@ class RawPanel():
         try:
             key, value = request.split('=')
         except AttributeError:
-            logging.debug("Request is None")
+            logger.debug("Request is None")
             return
         except ValueError:
             if not len(request):
-                logging.warn("Request is empty")
+                logger.warning("Request is empty")
                 await self.handle_lost_connection()
                 return
             elif request == 'nack':
-                logging.warn("Request is 'nack'")
+                logger.warning("Request is 'nack'")
                 return
             else:
-                logging.warn("Invalid request: {}".format(request))
+                logger.warning("Invalid request: %s", request)
         try:
             command, hwcid = key.split('#')
         except ValueError:
@@ -879,11 +883,11 @@ class RawPanel():
         try:
             await self.commands[command](*params)
         except KeyError:
-            logging.warn(request)
+            logger.warning("Unhandled panel message: %s", request)
             return
 
     async def process_buffers(self):
-        logging.info("Processing buffered hardware changes...")
+        logger.info("Processing buffered hardware changes...")
         while True:
             for hwid, v in self.hw_change_buffer.items():
                 t = time.perf_counter()
@@ -893,10 +897,10 @@ class RawPanel():
                     await self._hardware_change_process(hwid, value)
                     break
             await asyncio.sleep(self.delay)
-        logging.info("Buffer processing finished")
+        logger.info("Buffer processing finished")
 
     async def handle_requests(self):
-        logging.info("Handling requests from the panel...")
+        logger.info("Handling requests from the panel...")
         while True:
             try:
                 r = await self.receive()
@@ -904,39 +908,53 @@ class RawPanel():
             except asyncio.CancelledError:
                 await self.disconnect()
                 break
-        logging.info("Requests from the panel are not handled anymore")
+        logger.info("Requests from the panel are not handled anymore")
 
     async def send(self, message, timeout=10):
         if not self.connected:
-            await self.connect()
+            await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
             await asyncio.sleep(5)
+        if not self.connected:
+            return
         message = json.dumps(message, separators=(',', ':'))
-        logging.debug(message)
+        logger.debug(message)
         self.writer.write('{}\n'.format(message).encode('ascii'))
         try:
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-        except (ConnectionResetError, asyncio.TimeoutError):
-            logging.warn("Message was not delivered: {}".format(message))
+        except (ConnectionResetError, OSError, TimeoutError) as e:
+            logger.warning(
+                "Message was not delivered: %s (%s)",
+                message,
+                type(e).__name__,
+            )
+            logger.debug("%s", e)
             await self.handle_lost_connection()
 
     async def receive(self):
         if not self.connected:
-            await self.connect()
+            await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
             await asyncio.sleep(5)
+        if not self.connected:
+            return
         try:
             raw_record = await self.reader.readline()
-        except ConnectionResetError:
+        except (ConnectionResetError, OSError, TimeoutError) as e:
+            logger.warning(
+                "Request listner was interrupted (%s)",
+                type(e).__name__,
+            )
+            logger.debug("%s", e)
             await self.handle_lost_connection()
             return
         try:
             record = raw_record.decode().strip()
         except UnicodeDecodeError as e:
-            logging.error(raw_record)
+            logger.error("Undecodable panel data: %r", raw_record)
             raise e
         else:
-            logging.debug(record)
+            logger.debug(record)
         return record
 
     async def process_data_feedback(self, d):
@@ -944,7 +962,7 @@ class RawPanel():
             try:
                 mapping = feedback_map[k]
             except KeyError:
-                logging.debug("path {} is not mapped".format(k))
+                logger.debug("path %s is not mapped", k)
                 continue
             t = re.search(r"\w+$", k)[0]
             if t in ('send', 'fader'):
@@ -1009,7 +1027,7 @@ class RawPanel():
         try:
             mapping = feedback_map[base_path]
         except KeyError:
-            logging.warning("path {} is not mapped".format(base_path))
+            logger.warning("path %s is not mapped", base_path)
             return
         for m in mapping:
             hwcid = mapping[m]['hwcid']
@@ -1032,7 +1050,7 @@ class RawPanel():
                                 mapping[m]['mute_path'])
                             )
                         except KeyError:
-                            logging.warn(
+                            logger.warning(
                                 "fader_path and mute_path should be \
                                 configured if pre_fader is set to False"
                             )
@@ -1043,14 +1061,12 @@ class RawPanel():
                 else:
                     for k, v in d.items():
                         if not k.startswith(base_path):
-                            logging.debug("Skipping feedback: {}: {}".format(
-                                k, v
-                            ))
+                            logger.debug("Skipping feedback: %s: %s", k, v)
                             continue
                         try:
                             k, s = os.path.split(k)
                         except Exception:
-                            logging.info("Can't split {}".format(k))
+                            logger.warning("Can't split %s", k)
                         if s != 'peaks':
                             try:
                                 data1 = v[mapping[m]['channels'][0]]

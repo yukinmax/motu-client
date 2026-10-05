@@ -6,46 +6,50 @@ import math
 import logging
 
 
+logger = logging.getLogger(__name__)
+
 level_range = (0, 10 ** (12 / 20))
 
 
 async def request(url, params=None, etag=None, method='GET', data=None,
-                  retries=None, retry_interval_sec=10):
+                  retries=None, retry_interval_sec=10, timeout=None):
     headers = {}
-    attempt = 0
     if etag:
         headers['If-None-Match'] = etag
     if method == 'PATCH':
         headers['Content-Type'] = 'application/x-www-form-urlencoded'
+
+    attempt = 0
     while True:
         attempt += 1
         try:
-            r = await asyncio.to_thread(req.request,
-                                        method,
-                                        url,
-                                        params=params,
-                                        headers=headers,
-                                        data=data)
-        except(req.exceptions.ConnectionError):
-            logging.warn("Error connecting to {}".format(url))
+            r = await asyncio.to_thread(
+                req.request,
+                method,
+                url,
+                params=params,
+                headers=headers,
+                data=data,
+                timeout=timeout,
+            )
+            break
+        except req.exceptions.RequestException as e:
+            logger.warning(
+                "Request to %s failed (%s)",
+                url,
+                type(e).__name__,
+            )
+            logger.debug("%s", e)
             if retries is not None and attempt > retries:
-                logging.error(("Maximum retries reached "
-                               "connecting to {}".format(url)))
-                r = {
-                    'status_code': 503,
-                    'reason': "Service Unavailable"
-                }
-                break
+                logger.error("Maximum retries reached for %s", url)
+                return None
             else:
                 await asyncio.sleep(retry_interval_sec)
-        else:
-            break
+
     if r.status_code in (200, 204):
         return r
     elif r.status_code != 304:
-        print('Error code {} - {}'.format(r.status_code, r.reason))
-    else:
-        pass
+        logger.error("Error code %s - %s", r.status_code, r.reason)
     return None
 
 
@@ -147,9 +151,10 @@ class Store():
         response = await request(
             url=url,
             params=params,
-            etag=self.etag
+            etag=self.etag,
+            timeout=20,  # MOTU Long Polling wait period is 15s
         )
-        if response:
+        if response is not None:
             if diff_check:
                 new_data = await dict_values_to_tuples(response.json())
                 data_diff = await dict_diff(self.data, new_data)
@@ -158,21 +163,19 @@ class Store():
             self.etag = response.headers['ETag']
             if data_diff:
                 self.data.update(data_diff)
-                logging.debug("Modified: {} -> {}".format(self.base_path,
-                                                          data_diff))
+                logger.debug("Modified: %s -> %s", self.base_path, data_diff)
                 if self.change_handler and handle_changes:
                     await self.change_handler(data_diff)
                 return data_diff
         else:
-            logging.debug("Not modified: {}".format(self.base_path))
+            logger.debug("Not modified: %s", self.base_path)
 
     async def get(self, path):
         value = self.data[path]
         return value
 
     async def poll(self, diff_check=False, handle_changes=True):
-        logging.info("Polling MOTU {} ({})...".format(self.base_path,
-                                                      self.hostname))
+        logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
         while True:
             try:
                 await self.refresh(diff_check=diff_check,
@@ -207,13 +210,14 @@ class DataStore(Store):
             url=url,
             params=params,
             method='PATCH',
-            data=data
+            data=data,
+            retries=1,
+            timeout=5
         )
-        if response:
+        if response is not None:
             data_diff = {path: value}
             self.data.update(data_diff)
-            logging.debug("Modified: {} -> {}".format(self.base_path,
-                                                      data_diff))
+            logger.debug("Modified: %s -> %s", self.base_path, data_diff)
             if self.change_handler:
                 await self.change_handler({path: value})
         return response
@@ -225,10 +229,10 @@ class DataStore(Store):
             return "FAILURE"
         j = float(not(s))
         r = await self.set(path, j)
-        if r.status_code == 204:
+        if r is not None and r.status_code == 204:
             return j
         else:
-            print("FAILURE")
+            logger.error("Failed to toggle %s", path)
             return "FAILURE"
 
 
@@ -252,7 +256,7 @@ class Meters(Store):
             tuple([max(values) for values in zip(*filtered_data.values())])
         }
         self.data.update(peaks)
-        logging.debug("Modified: {} -> {}".format(self.base_path, peaks))
+        logger.debug("Modified: %s -> %s", self.base_path, peaks)
         return peaks
 
     async def refresh(self, diff_check=True, handle_changes=True):
@@ -264,8 +268,7 @@ class Meters(Store):
                 await self.change_handler(data_diff)
 
     async def poll(self, diff_check=True, handle_changes=True):
-        logging.info("Polling MOTU {} ({})...".format(self.base_path,
-                                                      self.hostname))
+        logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
         while True:
             try:
                 await self.refresh(diff_check=diff_check,
