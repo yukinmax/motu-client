@@ -39,9 +39,9 @@ async def request(url, params=None, etag=None, method='GET', data=None,
                 url,
                 type(e).__name__,
             )
-            logger.debug(e)
+            logger.debug("%s", e)
             if retries is not None and attempt > retries:
-                logger.error("Maximum retries reached connecting to %s", url)
+                logger.error("Maximum retries reached for %s", url)
                 return None
             else:
                 await asyncio.sleep(retry_interval_sec)

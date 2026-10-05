@@ -872,7 +872,7 @@ class RawPanel():
         try:
             await self.commands[command](*params)
         except KeyError:
-            logger.warning(request)
+            logger.warning("Unhandled panel message: %s", request)
             return
 
     async def process_buffers(self):
@@ -926,7 +926,7 @@ class RawPanel():
         try:
             record = raw_record.decode().strip()
         except UnicodeDecodeError as e:
-            logger.error(raw_record)
+            logger.error("Undecodable panel data: %r", raw_record)
             raise e
         else:
             logger.debug(record)
