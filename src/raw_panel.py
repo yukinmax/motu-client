@@ -671,14 +671,14 @@ class RawPanel():
                 v = int(v)
             except ValueError:
                 if re.match(r"Down", v):
-                    v = await self.ds.get(path)
+                    v = self.ds.get(path)
                     try:
                         dv = tmp_mapping[hwcid]['default_level']
                     except KeyError:
                         logger.debug("No default value for hwcid %s", hwcid)
                         v = 1
                     else:
-                        dv = await motu.level_from_db(dv)
+                        dv = motu.level_from_db(dv)
                         if v != dv:
                             v = dv
                         else:
@@ -686,8 +686,8 @@ class RawPanel():
                 else:
                     return
             else:
-                v = await motu.db_from_raw(v, raw_db_range_mapping)
-                v = await motu.level_from_db(v)
+                v = motu.db_from_raw(v, raw_db_range_mapping)
+                v = motu.level_from_db(v)
             if self.ds:
                 await self.ds.set(path, v)
         elif path_type in ('mute',):
@@ -697,7 +697,7 @@ class RawPanel():
         elif path_type == 'solo':
             if re.match(r"Down", v):
                 if self.ds:
-                    if await self.ds.get('mix/monitor/0/override') != -1.0:
+                    if self.ds.get('mix/monitor/0/override') != -1.0:
                         await self.ds.set(path, 1.0)
                     else:
                         await self.ds.toggle(path)
@@ -713,7 +713,7 @@ class RawPanel():
                         return
                     else:
                         path = os.path.dirname(path)
-                    if await self.ds.get(path) == override:
+                    if self.ds.get(path) == override:
                         await self.ds.set(path, -1.0)
                     else:
                         await self.ds.set(path, override)
@@ -736,11 +736,11 @@ class RawPanel():
         md = {}
         for path in feedback_map:
             try:
-                v = await self.ds.get(path)
+                v = self.ds.get(path)
             except KeyError:
                 for i in [str(s) for s in range(15)] + ['peaks']:
                     try:
-                        v = await self.ms.get(os.path.join(path, i))
+                        v = self.ms.get(os.path.join(path, i))
                     except KeyError:
                         logger.warning("Path %s is not available", path)
                         continue
@@ -966,8 +966,8 @@ class RawPanel():
                 continue
             t = re.search(r"\w+$", k)[0]
             if t in ('send', 'fader'):
-                db_value = await motu.level_to_db(float(v))
-                raw_value = await motu.db_from_raw(
+                db_value = motu.level_to_db(float(v))
+                raw_value = motu.db_from_raw(
                     db_value,
                     raw_db_range_mapping,
                     reverse=True
@@ -1044,9 +1044,9 @@ class RawPanel():
                 else:
                     if not pre:
                         try:
-                            multiplier = await self.ds.get(
+                            multiplier = self.ds.get(
                                 mapping[m]['fader_path']
-                            ) * int(not await self.ds.get(
+                            ) * int(not self.ds.get(
                                 mapping[m]['mute_path'])
                             )
                         except KeyError:
@@ -1118,8 +1118,8 @@ class RawPanel():
                 await self.send(msg)
 
     async def _level_to_raw(self, value, range_mapping, multiplier=1):
-        db = await motu.level_to_db(float(value * multiplier / 1000))
-        return await motu.db_from_raw(db, range_mapping, reverse=True)
+        db = motu.level_to_db(float(value * multiplier / 1000))
+        return motu.db_from_raw(db, range_mapping, reverse=True)
 
     async def _get_sleep_timeout(self):
         return [{"Command": {"GetSleepTimeout": True}}]
