@@ -21,4 +21,4 @@
 - [x] Create Dockerfile and streamline the deployment
 - [ ] Implement config file
 - [ ] Decouple API service, MOTU connection handling and Skaarhoj Panel connection handling
-- [ ] Replace requests with aiohttp
+- [x] Replace requests with aiohttp
