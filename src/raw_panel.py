@@ -973,7 +973,7 @@ class RawPanel():
                 break
         logger.info("Requests from the panel are not handled anymore")
 
-    async def send(self, message, timeout=10):
+    async def send(self, message, timeout=1):
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
