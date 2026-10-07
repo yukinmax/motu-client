@@ -37,11 +37,14 @@ if log_level_name not in _VALID_LOG_LEVELS:
 
 app = Quart('MOTU API')
 app.config["DEBUG"] = True
-motu_ds = motu.DataStore('ultralite-avb.ynet')
-motu_ms = motu.Meters('ultralite-avb.ynet')
-skaarhoj_panel = raw_panel.RawPanel('waveboard.ynet',
-                                    delay=0.001,
-                                    sleep_timeout=600)
+motu_http_client = motu.HTTPClient()
+motu_ds = motu.DataStore(motu_http_client, "ultralite-avb.ynet")
+motu_ms = motu.Meters(motu_http_client, "ultralite-avb.ynet")
+skaarhoj_panel = raw_panel.RawPanel(
+    'waveboard.ynet',
+    delay=0.001,
+    sleep_timeout=600,
+)
 skaarhoj_panel.set_ds(motu_ds)
 skaarhoj_panel.set_ms(motu_ms)
 motu_ds.set_change_handler(skaarhoj_panel.process_data_feedback)
@@ -55,6 +58,7 @@ raw_db_range_mapping = raw_panel.raw_db_range_mapping
 
 @app.before_serving
 async def startup():
+    await motu_http_client.start()
     app.add_background_task(skaarhoj_panel.handle_requests)
     app.add_background_task(skaarhoj_panel.process_buffers)
     app.add_background_task(skaarhoj_panel.handle_sleep_timeout)
@@ -62,10 +66,15 @@ async def startup():
     await motu_ds.refresh()
     await motu_ms.refresh()
     logger.info("Initial data refresh has completed")
-    app.add_background_task(motu_ds.poll)
+    app.add_background_task(motu_ds.poll, diff_check=False)
     app.add_background_task(motu_ms.poll)
     # app.add_background_task(skaarhoj_panel.handle_requests)
     # app.add_background_task(skaarhoj_panel.process_buffers)
+
+
+@app.after_serving
+async def shutdown():
+    await motu_http_client.close()
 
 
 @app.route('/', methods=['GET'])
@@ -104,7 +113,7 @@ async def mute_status():
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
     path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
-    return json.dumps({'status': str(await motu_ds.get(path))})
+    return json.dumps({'status': str(motu_ds.get(path))})
 
 
 @app.route('/api/v1/motu/aux-send-level', methods=['GET'])
@@ -116,18 +125,20 @@ async def mix_send_level_get():
     channel = int(request.args['chan'])
     aux = int(request.args['aux'])
     path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)
-    result = await motu_ds.get(path)
+    result = motu_ds.get(path)
     try:
         fmt = request.args['format']
     except KeyError:
         pass
     else:
         if fmt in ('db', 'raw'):
-            result = await motu.level_to_db(result)
+            result = motu.level_to_db(result)
         if fmt == 'raw':
-            result = await motu.db_from_raw(result,
-                                            raw_db_range_mapping,
-                                            reverse=True)
+            result = motu.db_from_raw(
+                result,
+                raw_db_range_mapping,
+                reverse=True,
+            )
     return json.dumps({'status': '{:.10f}'.format(result)})
 
 
@@ -145,17 +156,19 @@ async def mix_send_level_set():
     try:
         fmt = request.args['format']
     except KeyError:
-        value = await motu.limit_to_range(value,
-                                          motu.level_range[0],
-                                          motu.level_range[1])
+        value = motu.limit_to_range(
+            value,
+            motu.level_range[0],
+            motu.level_range[1],
+        )
     else:
         if fmt == 'raw':
-            value = await motu.db_from_raw(value, raw_db_range_mapping)
+            value = motu.db_from_raw(value, raw_db_range_mapping)
         if fmt in ('db', 'raw'):
-            value = await motu.level_from_db(value)
+            value = motu.level_from_db(value)
     path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)
     await motu_ds.set(path, value)
-    result = await motu_ds.get(path)
+    result = motu_ds.get(path)
     return json.dumps({'status': '{:.10f}'.format(result)})
 
 
