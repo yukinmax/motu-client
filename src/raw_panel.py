@@ -542,6 +542,7 @@ class RawPanel():
         self.connected = False
         self.connection_in_progress = False
         self.disconnect_in_progress = False
+        self._stopped = False
         self.reader = None
         self.writer = None
         self.sys_stat = None
@@ -744,6 +745,10 @@ class RawPanel():
         except OSError as e:
             logger.debug("Could not configure panel socket options: %s", e)
 
+    def stop(self) -> None:
+        """Signal long-running loops to exit; blocks reconnect."""
+        self._stopped = True
+
     def set_ds(self, datastore):
         self.ds = datastore
 
@@ -780,6 +785,9 @@ class RawPanel():
         await self.process_meters_feedback(md)
 
     async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
+        if self._stopped:
+            logger.info("Shutdown is in progress, connect aborted")
+            return
         if self.disconnect_in_progress:
             logger.info("Disconnect is in progress, connect aborted")
             return
@@ -789,7 +797,7 @@ class RawPanel():
         self.connection_in_progress = True
         logger.info("Connecting to %s:%s...", self.host, self.port)
         attempt = 0
-        while not self.connected:
+        while not self.connected and not self._stopped:
             attempt += 1
             try:
                 self.reader, self.writer = await asyncio.wait_for(
@@ -813,14 +821,8 @@ class RawPanel():
                         self.host,
                         self.port,
                     )
-                    self.connection_in_progress = False
                     break
                 await asyncio.sleep(retry_interval_sec)
-                logger.debug(
-                    "\tRetrying... %s/%s",
-                    attempt,
-                    float('inf') if retries is None else retries,
-                )
             else:
                 self._configure_socket(self.writer)
                 self.connected = True
@@ -830,8 +832,8 @@ class RawPanel():
                     self.port,
                     attempt,
                 )
-                self.connection_in_progress = False
                 await self.initialize()
+        self.connection_in_progress = False
 
     async def initialize(self):
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
@@ -887,6 +889,11 @@ class RawPanel():
 
     async def handle_lost_connection(self):
         logger.warning("Connection to %s:%s was lost", self.host, self.port)
+        if self._stopped:
+            logger.info(
+                "Shutdown is in progress, not handling lost connection"
+            )
+            return
         if self.disconnect_in_progress:
             logger.info(
                 "Disconnect is in progress, not handling lost connection"
@@ -913,13 +920,16 @@ class RawPanel():
             await self.send(wakeup_msg)
 
     async def handle_sleep_timeout(self):
-        while True:
-            t = time.perf_counter()
-            if not self.info['isSleeping']:
-                if self.last_activity + self.sleep_timeout <= t:
-                    await self.set_panel_sleep()
-                    await asyncio.sleep(10)
-            await asyncio.sleep(1)
+        while not self._stopped:
+            try:
+                t = time.perf_counter()
+                if not self.info['isSleeping']:
+                    if self.last_activity + self.sleep_timeout <= t:
+                        await self.set_panel_sleep()
+                        await asyncio.sleep(10)
+                await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                break
 
     async def handle_request(self, request):
         try:
@@ -948,20 +958,23 @@ class RawPanel():
 
     async def process_buffers(self):
         logger.info("Processing buffered hardware changes...")
-        while True:
-            for hwid, v in self.hw_change_buffer.items():
-                t = time.perf_counter()
-                value = v['value']
-                if t - v['time'] >= self.delay:
-                    del self.hw_change_buffer[hwid]
-                    await self._hardware_change_process(hwid, value)
+        while not self._stopped:
+            try:
+                for hwid, v in self.hw_change_buffer.items():
+                    t = time.perf_counter()
+                    value = v['value']
+                    if t - v['time'] >= self.delay:
+                        del self.hw_change_buffer[hwid]
+                        await self._hardware_change_process(hwid, value)
                     break
             await asyncio.sleep(self.delay)
+            except asyncio.CancelledError:
+                break
         logger.info("Buffer processing finished")
 
     async def handle_requests(self):
         logger.info("Handling requests from the panel...")
-        while True:
+        while not self._stopped:
             try:
                 r = await self.receive()
                 if r is None:
@@ -969,16 +982,20 @@ class RawPanel():
                     continue
                 await self.handle_request(r)
             except asyncio.CancelledError:
-                await self.disconnect()
                 break
         logger.info("Requests from the panel are not handled anymore")
 
     async def send(self, message, timeout=1):
+        if self._stopped:
+            return
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while self.connection_in_progress or self.disconnect_in_progress:
+        while (
+            not self._stopped
+            and (self.connection_in_progress or self.disconnect_in_progress)
+        ):
             await asyncio.sleep(0.1)
-        if not self.connected or self.writer is None:
+        if self._stopped or not self.connected or self.writer is None:
             return
 
         payload = json.dumps(message, separators=(',', ':'))
@@ -1002,12 +1019,17 @@ class RawPanel():
             await self.handle_lost_connection()
 
     async def receive(self):
+        if self._stopped:
+            return None
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while self.connection_in_progress or self.disconnect_in_progress:
+        while (
+            not self._stopped
+            and (self.connection_in_progress or self.disconnect_in_progress)
+        ):
             await asyncio.sleep(0.1)
-        if not self.connected or self.reader is None:
-            return
+        if self._stopped or not self.connected or self.reader is None:
+            return None
         try:
             raw_record = await self.reader.readline()
         except (ConnectionResetError, OSError, TimeoutError) as e:
@@ -1017,7 +1039,7 @@ class RawPanel():
             )
             logger.debug("%r", e)
             await self.handle_lost_connection()
-            return
+            return None
 
         # Clean peer close or half-close
         if not raw_record:

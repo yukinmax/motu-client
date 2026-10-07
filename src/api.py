@@ -36,7 +36,8 @@ if log_level_name not in _VALID_LOG_LEVELS:
     )
 
 app = Quart('MOTU API')
-app.config["DEBUG"] = True
+# Allow in-flight Motu long-polls (~20s) to finish or cancel cleanly.
+app.config["BACKGROUND_TASK_SHUTDOWN_TIMEOUT"] = 25
 motu_http_client = motu.HTTPClient()
 motu_ds = motu.DataStore(motu_http_client, "ultralite-avb.ynet")
 motu_ms = motu.Meters(motu_http_client, "ultralite-avb.ynet")
@@ -72,7 +73,13 @@ async def startup():
 
 @app.after_serving
 async def shutdown():
+    logger.info("Shutting down...")
+    skaarhoj_panel.stop()
+    motu_ds.stop()
+    motu_ms.stop()
+    await skaarhoj_panel.disconnect()
     await motu_http_client.close()
+    logger.info("Shutdown complete")
 
 
 @app.route('/', methods=['GET'])

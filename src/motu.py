@@ -237,9 +237,14 @@ class Store:
         self.client_id: int | None = None
         self.data: dict = {}
         self.change_handler = None
+        self._stopped = False
 
     def _url(self) -> str:
         return f"http://{self.hostname}/{self.base_path}"
+
+    def stop(self) -> None:
+        """Signal poll loops to exit on next iteration."""
+        self._stopped = True
 
     async def refresh(
         self,
@@ -293,7 +298,7 @@ class Store:
         handle_changes: bool = True,
     ) -> None:
         logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
-        while True:
+        while not self._stopped:
             try:
                 await self.refresh(
                     diff_check=diff_check,
@@ -303,6 +308,11 @@ class Store:
                 await asyncio.sleep(0)
             except asyncio.CancelledError:
                 break
+        logger.info(
+            "Stopped polling MOTU %s (%s)",
+            self.base_path,
+            self.hostname,
+        )
 
     def set_change_handler(self, handler) -> None:
         self.change_handler = handler
