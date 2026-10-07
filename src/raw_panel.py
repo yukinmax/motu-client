@@ -4,6 +4,7 @@ import math
 import re
 import logging
 import motu
+import socket
 import time
 import os.path
 
@@ -718,6 +719,25 @@ class RawPanel():
                     else:
                         await self.ds.set(path, override)
 
+    def _configure_socket(self, writer: asyncio.StreamWriter) -> None:
+        """Keepalive for dead-peer detection;
+           TCP_NODELAY for low-latency meters."""
+        sock = writer.get_extra_info("socket")
+        if sock is None:
+            return
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            # Linux; ignore if unsupported (e.g. some non-Linux builds)
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            if hasattr(socket, "TCP_KEEPINTVL"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
+            if hasattr(socket, "TCP_KEEPCNT"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError as e:
+            logger.debug("Could not configure panel socket options: %s", e)
+
     def set_ds(self, datastore):
         self.ds = datastore
 
@@ -796,6 +816,7 @@ class RawPanel():
                     float('inf') if retries is None else retries,
                 )
             else:
+                self._configure_socket(self.writer)
                 self.connected = True
                 logger.info(
                     "Connected to %s:%s after %s attempts.",
@@ -886,13 +907,9 @@ class RawPanel():
     async def handle_request(self, request):
         try:
             key, value = request.split('=')
-        except AttributeError:
-            logger.debug("Request is None")
-            return
         except ValueError:
             if not len(request):
-                logger.warning("Request is empty")
-                await self.handle_lost_connection()
+                logger.debug("Request is empty line")
                 return
             elif request == 'nack':
                 logger.warning("Request is 'nack'")
@@ -930,6 +947,9 @@ class RawPanel():
         while True:
             try:
                 r = await self.receive()
+                if r is None:
+                    await asyncio.sleep(0.1)
+                    continue
                 await self.handle_request(r)
             except asyncio.CancelledError:
                 await self.disconnect()
@@ -940,18 +960,25 @@ class RawPanel():
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
-            await asyncio.sleep(5)
-        if not self.connected:
+            await asyncio.sleep(0.1)
+        if not self.connected or self.writer is None:
             return
-        message = json.dumps(message, separators=(',', ':'))
-        logger.debug(message)
-        self.writer.write('{}\n'.format(message).encode('ascii'))
+
+        payload = json.dumps(message, separators=(',', ':'))
+        logger.debug(payload)
         try:
+            self.writer.write(f"{payload}\n".encode('ascii'))
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
+            transport = self.writer.transport
+            logger.debug(
+                "write_buf=%s closing=%s",
+                transport.get_write_buffer_size(),
+                self.writer.is_closing(),
+            )
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
                 "Message was not delivered: %s (%s)",
-                message,
+                payload,
                 type(e).__name__,
             )
             logger.debug("%s", e)
@@ -961,8 +988,8 @@ class RawPanel():
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
         while self.connection_in_progress or self.disconnect_in_progress:
-            await asyncio.sleep(5)
-        if not self.connected:
+            await asyncio.sleep(0.1)
+        if not self.connected or self.reader is None:
             return
         try:
             raw_record = await self.reader.readline()
@@ -974,13 +1001,19 @@ class RawPanel():
             logger.debug("%s", e)
             await self.handle_lost_connection()
             return
+
+        # Clean peer close or half-close
+        if not raw_record:
+            logger.warning("Panel connection closed (EOF)")
+            await self.handle_lost_connection()
+            return None
+
         try:
             record = raw_record.decode().strip()
-        except UnicodeDecodeError as e:
-            logger.error("Undecodable panel data: %r", raw_record)
-            raise e
-        else:
-            logger.debug(record)
+        except UnicodeDecodeError:
+            logger.warning("Undecodable panel data: %r", raw_record)
+            return None
+        logger.debug(record)
         return record
 
     async def process_data_feedback(self, d):
