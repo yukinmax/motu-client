@@ -806,7 +806,7 @@ class RawPanel():
                     self.port,
                     type(e).__name__,
                 )
-                logger.debug("%s", e)
+                logger.debug("%r", e)
                 if retries is not None and attempt > retries:
                     logger.error(
                         "Maximum retries reached for %s:%s",
@@ -871,7 +871,7 @@ class RawPanel():
                     "aborting transport",
                     type(e).__name__,
                 )
-                logger.debug("%s", e)
+                logger.debug("%r", e)
                 transport = writer.transport
                 if transport is not None and not transport.is_closing():
                     transport.abort()
@@ -998,7 +998,7 @@ class RawPanel():
                 payload,
                 type(e).__name__,
             )
-            logger.debug("%s", e)
+            logger.debug("%r", e)
             await self.handle_lost_connection()
 
     async def receive(self):
@@ -1012,10 +1012,10 @@ class RawPanel():
             raw_record = await self.reader.readline()
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
-                "Request listener was interrupted (%s)",
+                "Panel read failed/timed out (%s)",
                 type(e).__name__,
             )
-            logger.debug("%s", e)
+            logger.debug("%r", e)
             await self.handle_lost_connection()
             return
 
