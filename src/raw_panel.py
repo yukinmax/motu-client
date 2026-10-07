@@ -734,6 +734,12 @@ class RawPanel():
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
             if hasattr(socket, "TCP_KEEPCNT"):
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            if hasattr(socket, "TCP_USER_TIMEOUT"):
+                sock.setsockopt(
+                    socket.IPPROTO_TCP,
+                    socket.TCP_USER_TIMEOUT,
+                    10_000,
+                )
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError as e:
             logger.debug("Could not configure panel socket options: %s", e)
@@ -846,18 +852,29 @@ class RawPanel():
         if self.connection_in_progress:
             logger.info("Connect is in progress, disconnect aborted")
             return
+
         self.disconnect_in_progress = True
         logger.info("Closing connection to %s:%s...", self.host, self.port)
-        if self.writer:
-            try:
-                self.writer.close()
-                await self.writer.wait_closed()
-            except Exception as e:
-                logger.warning("Can't clean the connection gracefully")
-                logger.debug("%s", e)
+
+        writer = self.writer
         self.reader = None
         self.writer = None
         self.connected = False
+
+        if writer is not None:
+            try:
+                writer.close()
+                await asyncio.wait_for(self.writer.wait_closed(), timeout=2)
+            except (TimeoutError, ConnectionResetError, OSError) as e:
+                logger.warning(
+                    "Can't close the connection gracefully (%s); "
+                    "aborting transport",
+                    type(e).__name__,
+                )
+                logger.debug("%s", e)
+                transport = writer.transport
+                if transport is not None and not transport.is_closing():
+                    transport.abort()
         logger.info("Connection to %s:%s is closed", self.host, self.port)
         if purge:
             await self.purge_panel_info()
