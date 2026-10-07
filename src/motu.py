@@ -268,12 +268,12 @@ class Store:
         else:
             data_diff = dict_values_to_tuples(payload)
 
-        etag = response.headers.get("ETag")
+        etag = response.etag
         if etag:
             self.etag = etag
         else:
             logger.warning(
-                "Missing ETag on %s response; long-poll may degrade",
+                "Missing ETag on %s response",
                 self.base_path,
             )
         if data_diff:
