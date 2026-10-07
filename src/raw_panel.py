@@ -967,7 +967,7 @@ class RawPanel():
                         del self.hw_change_buffer[hwid]
                         await self._hardware_change_process(hwid, value)
                     break
-            await asyncio.sleep(self.delay)
+                await asyncio.sleep(self.delay)
             except asyncio.CancelledError:
                 break
         logger.info("Buffer processing finished")
