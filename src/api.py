@@ -67,7 +67,7 @@ async def startup():
     await motu_ms.refresh()
     logger.info("Initial data refresh has completed")
     app.add_background_task(motu_ds.poll)
-    app.add_background_task(motu_ms.poll, diff_check=True)
+    app.add_background_task(motu_ms.poll)
     # app.add_background_task(skaarhoj_panel.handle_requests)
     # app.add_background_task(skaarhoj_panel.process_buffers)
 

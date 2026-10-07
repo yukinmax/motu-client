@@ -269,7 +269,14 @@ class Store:
         else:
             data_diff = dict_values_to_tuples(payload)
 
-        self.etag = response.headers.get("ETag")
+        etag = response.headers.get("ETag")
+        if etag:
+            self.etag = etag
+        else:
+            logger.warning(
+                "Missing ETag on %s response; long-poll may degrade",
+                self.base_path,
+            )
         if data_diff:
             self.data.update(data_diff)
             logger.debug("Modified: %s -> %s", self.base_path, data_diff)
@@ -283,7 +290,7 @@ class Store:
 
     async def poll(
         self,
-        diff_check: bool = False,
+        diff_check: bool = True,
         handle_changes: bool = True,
     ) -> None:
         logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
