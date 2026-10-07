@@ -754,7 +754,11 @@ class RawPanel():
         await self.process_meters_feedback(md)
 
     async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
+        if self.disconnect_in_progress:
+            logger.info("Disconnect is in progress, connect aborted")
+            return
         if self.connection_in_progress:
+            logger.info("Another connection is in progress, connect aborted")
             return
         self.connection_in_progress = True
         logger.info("Connecting to %s:%s...", self.host, self.port)
@@ -812,28 +816,50 @@ class RawPanel():
         #  received from the panel
         logger.info("Raw Panel %s is initialized", self.host)
 
-    async def disconnect(self):
+    async def disconnect(self, purge=False):
+        if self.disconnect_in_progress:
+            logger.info(
+                "Another disconnect is in progress, disconnect aborted"
+            )
+            return
+        if self.connection_in_progress:
+            logger.info("Connect is in progress, disconnect aborted")
+            return
         self.disconnect_in_progress = True
         logger.info("Closing connection to %s:%s...", self.host, self.port)
-        self.writer.close()
-        await self.writer.wait_closed()
+        if self.writer:
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception as e:
+                logger.warning("Can't clean the connection gracefully")
+                logger.debug("%s", e)
+        self.reader = None
+        self.writer = None
         self.connected = False
+        logger.info("Connection to %s:%s is closed", self.host, self.port)
+        if purge:
+            await self.purge_panel_info()
         self.disconnect_in_progress = False
 
     async def purge_panel_info(self):
         for key in self.info:
             self.info[key] = None
+        logger.info("Panel info was purged")
 
     async def handle_lost_connection(self):
-        if self.disconnect_in_progress or self.connection_in_progress:
-            return
-        self.disconnect_in_progress = True
         logger.warning("Connection to %s:%s was lost", self.host, self.port)
-        self.writer = None
-        self.reader = None
-        self.connected = False
-        await self.purge_panel_info()
-        self.disconnect_in_progress = False
+        if self.disconnect_in_progress:
+            logger.info(
+                "Disconnect is in progress, not handling lost connection"
+            )
+            return
+        if self.connection_in_progress:
+            logger.info(
+                "Connect is in progress, not handling lost connection"
+            )
+            return
+        await self.disconnect(purge=True)
 
     async def set_panel_sleep(self):
         s_t_msg = await self._set_sleep_timeout(1)  # 1s
@@ -942,7 +968,7 @@ class RawPanel():
             raw_record = await self.reader.readline()
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
-                "Request listner was interrupted (%s)",
+                "Request listener was interrupted (%s)",
                 type(e).__name__,
             )
             logger.debug("%s", e)
