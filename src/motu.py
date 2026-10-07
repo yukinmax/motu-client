@@ -7,7 +7,7 @@ import logging
 import math
 import random
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class HttpResult:
 
     status_code: int
     reason: str | None
-    headers: Mapping[str, str]
+    etag: str | None = None
     _body: Any = None
 
     def json(self) -> Any:
@@ -195,14 +195,13 @@ class HTTPClient:
                 ) as resp:
                     status = resp.status
                     reason = resp.reason
-                    # Copy headers before leaving the context manager.
-                    hdrs = {k: v for k, v in resp.headers.items()}
+                    etag = resp.headers.get("ETag")  # case-insensitive
 
                     if status in (200, 204):
                         body = None
                         if status == 200:
                             body = await resp.json(content_type=None)
-                        return HttpResult(status, reason, hdrs, body)
+                        return HttpResult(status, reason, etag, body)
 
                     if status != 304:
                         logger.error("Error code %s - %s", status, reason)
