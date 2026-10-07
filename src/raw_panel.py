@@ -864,7 +864,7 @@ class RawPanel():
         if writer is not None:
             try:
                 writer.close()
-                await asyncio.wait_for(self.writer.wait_closed(), timeout=2)
+                await asyncio.wait_for(writer.wait_closed(), timeout=2)
             except (TimeoutError, ConnectionResetError, OSError) as e:
                 logger.warning(
                     "Can't close the connection gracefully (%s); "
