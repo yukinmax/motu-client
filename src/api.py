@@ -36,7 +36,6 @@ if log_level_name not in _VALID_LOG_LEVELS:
     )
 
 app = Quart('MOTU API')
-app.config["DEBUG"] = True
 app.config["BACKGROUND_TASK_SHUTDOWN_TIMEOUT"] = 5
 motu_http_client = motu.HTTPClient()
 motu_ds = motu.DataStore(motu_http_client, "ultralite-avb.ynet")
