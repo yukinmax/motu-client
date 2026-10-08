@@ -833,7 +833,6 @@ class RawPanel():
                         self.port,
                         attempt,
                     )
-                await self.initialize()
         finally:
             self.connection_in_progress = False
         if self.connected and not self._stopped:
