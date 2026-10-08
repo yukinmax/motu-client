@@ -797,43 +797,47 @@ class RawPanel():
         self.connection_in_progress = True
         logger.info("Connecting to %s:%s...", self.host, self.port)
         attempt = 0
-        while not self.connected and not self._stopped:
-            attempt += 1
-            try:
-                self.reader, self.writer = await asyncio.wait_for(
-                    asyncio.open_connection(
-                        self.host,
-                        self.port,
-                    ),
-                    timeout=timeout
-                )
-            except (ConnectionRefusedError, OSError, TimeoutError) as e:
-                logger.warning(
-                    "Connection to %s:%s failed (%s)",
-                    self.host,
-                    self.port,
-                    type(e).__name__,
-                )
-                logger.debug("%r", e)
-                if retries is not None and attempt > retries:
-                    logger.error(
-                        "Maximum retries reached for %s:%s",
-                        self.host,
-                        self.port,
+        try:
+            while not self.connected and not self._stopped:
+                attempt += 1
+                try:
+                    self.reader, self.writer = await asyncio.wait_for(
+                        asyncio.open_connection(
+                            self.host,
+                            self.port,
+                        ),
+                        timeout=timeout
                     )
-                    break
-                await asyncio.sleep(retry_interval_sec)
-            else:
-                self._configure_socket(self.writer)
-                self.connected = True
-                logger.info(
-                    "Connected to %s:%s after %s attempts.",
-                    self.host,
-                    self.port,
-                    attempt,
-                )
+                except (ConnectionRefusedError, OSError, TimeoutError) as e:
+                    logger.warning(
+                        "Connection to %s:%s failed (%s)",
+                        self.host,
+                        self.port,
+                        type(e).__name__,
+                    )
+                    logger.debug("%r", e)
+                    if retries is not None and attempt > retries:
+                        logger.error(
+                            "Maximum retries reached for %s:%s",
+                            self.host,
+                            self.port,
+                        )
+                        break
+                    await asyncio.sleep(retry_interval_sec)
+                else:
+                    self._configure_socket(self.writer)
+                    self.connected = True
+                    logger.info(
+                        "Connected to %s:%s after %s attempts.",
+                        self.host,
+                        self.port,
+                        attempt,
+                    )
                 await self.initialize()
-        self.connection_in_progress = False
+        finally:
+            self.connection_in_progress = False
+        if self.connected and not self._stopped:
+            await self.initialize()
 
     async def initialize(self):
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
@@ -863,24 +867,26 @@ class RawPanel():
         self.writer = None
         self.connected = False
 
-        if writer is not None:
-            try:
-                writer.close()
-                await asyncio.wait_for(writer.wait_closed(), timeout=2)
-            except (TimeoutError, ConnectionResetError, OSError) as e:
-                logger.warning(
-                    "Can't close the connection gracefully (%s); "
-                    "aborting transport",
-                    type(e).__name__,
-                )
-                logger.debug("%r", e)
-                transport = writer.transport
-                if transport is not None and not transport.is_closing():
-                    transport.abort()
-        logger.info("Connection to %s:%s is closed", self.host, self.port)
-        if purge:
-            await self.purge_panel_info()
-        self.disconnect_in_progress = False
+        try:
+            if writer is not None:
+                try:
+                    writer.close()
+                    await asyncio.wait_for(writer.wait_closed(), timeout=2)
+                except (TimeoutError, ConnectionResetError, OSError) as e:
+                    logger.warning(
+                        "Can't close the connection gracefully (%s); "
+                        "aborting transport",
+                        type(e).__name__,
+                    )
+                    logger.debug("%r", e)
+                    transport = writer.transport
+                    if transport is not None and not transport.is_closing():
+                        transport.abort()
+            logger.info("Connection to %s:%s is closed", self.host, self.port)
+            if purge:
+                await self.purge_panel_info()
+        finally:
+            self.disconnect_in_progress = False
 
     async def purge_panel_info(self):
         for key in self.info:
