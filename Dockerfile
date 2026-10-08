@@ -33,5 +33,6 @@ COPY ./src /app
 
 # Expose ports and define execution entry points
 EXPOSE 5000
+ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["hypercorn", "api:app"]
 CMD ["--bind", "0.0.0.0:5000", "--config", "hypercorn.toml"]
