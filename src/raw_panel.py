@@ -628,7 +628,7 @@ class RawPanel():
         if not new_state and (prev_state or prev_state is None):
             # Init the panel feedback only after panels wakes up
             # or initializes
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1.0)
             await self.init_feedback()
 
     def _update_panel_sleep_timeout(self, value):
