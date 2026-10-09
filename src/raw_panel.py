@@ -951,6 +951,7 @@ class RawPanel():
                 return
             else:
                 logger.warning("Invalid request: %s", request)
+                return
         try:
             command, hwcid = key.split('#')
         except ValueError:
