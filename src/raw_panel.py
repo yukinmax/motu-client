@@ -656,6 +656,7 @@ class RawPanel():
         change['value'] = value
 
     async def _hardware_change_process(self, hwcid, value):
+        # TODO: Split and refactor
         await self.reset_panel_sleep()
         try:
             path = tmp_mapping[hwcid]['path']
@@ -917,6 +918,7 @@ class RawPanel():
         await self.send(s_t_msg)
 
     async def reset_panel_sleep(self):
+        # TODO: Review the logic
         if self.info['panel_sleep_timeout'] or \
            self.info['panel_sleep_timeout'] is None:
             s_t_msg = self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
@@ -926,6 +928,7 @@ class RawPanel():
             await self.send(wakeup_msg)
 
     async def handle_sleep_timeout(self):
+        # TODO: Add some logging
         while not self._stopped:
             try:
                 t = time.perf_counter()
@@ -1065,6 +1068,7 @@ class RawPanel():
         return record
 
     async def process_data_feedback(self, d):
+        # TODO: Split and refactor
         for k, v in d.items():
             try:
                 mapping = feedback_map[k]
@@ -1128,8 +1132,10 @@ class RawPanel():
                 await self.send(msg)
 
     async def process_meters_feedback(self, d):
+        # TODO: Split and refactor
         # Currently sends data for all meters even if only 1 meter data changed
         self.last_activity = time.perf_counter()
+        # TODO: Figure out how to avoid constant sleep reset
         await self.reset_panel_sleep()
         msg = {}
         base_path = 'mix/level'
