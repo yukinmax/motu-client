@@ -966,7 +966,8 @@ class RawPanel():
         # Handle both async and sync methods
         if inspect.iscoroutinefunction(cmd):
             await cmd(*params)
-        cmd(*params)
+        else:
+            cmd(*params)
 
     async def process_buffers(self):
         logger.info("Processing buffered hardware changes...")
