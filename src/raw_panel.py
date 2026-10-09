@@ -583,6 +583,8 @@ class RawPanel():
         self.ds = None
         self.ms = None
         self.last_activity = time.perf_counter()
+        self._last_sleep_reset = 0.0
+        self._sleep_reset_min_interval = 60.0  # seconds
 
     def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -841,11 +843,13 @@ class RawPanel():
             await self.initialize()
 
     async def initialize(self):
+        # Responses from the panel are handled only after the paneli
+        # handlers are started
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
         await self.send(hello_msg)
         s_t_msg = self._get_sleep_timeout()
         await self.send(s_t_msg)
-        await self.reset_panel_sleep()
+        await self.reset_panel_sleep(force=True)
         #  TODO: Figure out a way to only log this after response is
         #  received from the panel
         logger.info("Raw Panel %s is initialized", self.host)
@@ -917,27 +921,49 @@ class RawPanel():
         s_t_msg = self._set_sleep_timeout(1)  # 1s
         await self.send(s_t_msg)
 
-    async def reset_panel_sleep(self):
-        # TODO: Review the logic
-        if self.info['panel_sleep_timeout'] or \
-           self.info['panel_sleep_timeout'] is None:
-            s_t_msg = self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
+    async def reset_panel_sleep(self, force: bool = False):
+        """Push a long panel sleep timeout override and wakeup message.
+
+        Throttled by default so high-rate feedback does not spam the panel.
+        """
+        now = time.perf_counter()
+        if (
+            not force
+            and (now - self._last_sleep_reset) < self._sleep_reset_min_interval
+        ):
+            return
+
+        sleep_timeout_override = 48 * 60 * 60 * 1000  # 48h
+        # Reset the panel sleep timeout value only if it was not initialized
+        # or set to a different value
+        if (
+            self.info['panel_sleep_timeout'] != sleep_timeout_override
+            or self.info['panel_sleep_timeout'] is None
+        ):
+            s_t_msg = self._set_sleep_timeout(sleep_timeout_override)
             await self.send(s_t_msg)
-        if self.info['isSleeping']:
-            wakeup_msg = [{'Command': {'WakeUp': True}}]
-            await self.send(wakeup_msg)
+
+        # Send the wakeup command even if the panel is not sleeping
+        wakeup_msg = [{'Command': {'WakeUp': True}}]
+        await self.send(wakeup_msg)
+        self._last_sleep_reset = now
 
     async def handle_sleep_timeout(self):
-        # TODO: Add some logging
+        logger.info("Panel external sleep timer started")
         while not self._stopped:
             try:
                 t = time.perf_counter()
                 if not self.info['isSleeping']:
                     if self.last_activity + self.sleep_timeout <= t:
+                        logger.info(
+                            "External sleep timeout reached; "
+                            "putting panel to sleep"
+                        )
                         await self.set_panel_sleep()
                 await asyncio.sleep(10)
             except asyncio.CancelledError:
                 break
+        logger.info("Panel external sleep timer stopped")
 
     async def handle_request(self, request):
         try:
@@ -1137,7 +1163,6 @@ class RawPanel():
         # TODO: Split and refactor
         # Currently sends data for all meters even if only 1 meter data changed
         self.last_activity = time.perf_counter()
-        # TODO: Figure out how to avoid constant sleep reset
         await self.reset_panel_sleep()
         msg = {}
         base_path = 'mix/level'
