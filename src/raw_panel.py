@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import math
 import re
@@ -583,32 +584,32 @@ class RawPanel():
         self.ms = None
         self.last_activity = time.perf_counter()
 
-    async def _update_sys_stat(self, value):
+    def _update_sys_stat(self, value):
         self.sys_stat = value
         logger.debug("Updated System Stats")
 
-    async def _update_model(self, value):
+    def _update_model(self, value):
         self.info['model'] = value
 
-    async def _update_serial(self, value):
+    def _update_serial(self, value):
         self.info['serial'] = value
 
-    async def _update_version(self, value):
+    def _update_version(self, value):
         self.info['version'] = value
 
-    async def _update_name(self, value):
+    def _update_name(self, value):
         self.info['name'] = value
 
-    async def _update_platform(self, value):
+    def _update_platform(self, value):
         self.info['platform'] = value
 
-    async def _update_bluePillReady(self, value):
+    def _update_bluePillReady(self, value):
         self.info['bluePillReady'] = value
 
-    async def _update_panelType(self, value):
+    def _update_panelType(self, value):
         self.info['panelType'] = value
 
-    async def _update_support(self, value):
+    def _update_support(self, value):
         self.info['support'] = value
 
     async def _update_isSleeping(self, value):
@@ -628,7 +629,7 @@ class RawPanel():
             await asyncio.sleep(0.5)
             await self.init_feedback()
 
-    async def _update_panel_sleep_timeout(self, value):
+    def _update_panel_sleep_timeout(self, value):
         prev_state = self.info['panel_sleep_timeout']
         new_state = int(value)
         if new_state == prev_state:
@@ -640,14 +641,14 @@ class RawPanel():
         logger.info("Internal Panel Sleep Timer: %s", sleep_timer_str)
         self.info['panel_sleep_timeout'] = new_state
 
-    async def _update_EnvironmentalHealth(self, value):
+    def _update_EnvironmentalHealth(self, value):
         self.info['EnvironmentalHealth'] = value
 
-    async def _update_map(self, value):
+    def _update_map(self, value):
         k, v = value.split(":")
         self.panel_map[k] = v
 
-    async def _hardware_change_schedule(self, hwcid, value):
+    def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
         self.last_activity = t
         change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
@@ -780,8 +781,8 @@ class RawPanel():
             else:
                 dd[path] = v
         logger.debug("Init datastore feedback %s", dd)
-        logger.debug("Init meters feedback %s", md)
         await self.process_data_feedback(dd)
+        logger.debug("Init meters feedback %s", md)
         await self.process_meters_feedback(md)
 
     async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
@@ -841,7 +842,7 @@ class RawPanel():
     async def initialize(self):
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
         await self.send(hello_msg)
-        s_t_msg = await self._get_sleep_timeout()
+        s_t_msg = self._get_sleep_timeout()
         await self.send(s_t_msg)
         await self.reset_panel_sleep()
         #  TODO: Figure out a way to only log this after response is
@@ -883,11 +884,11 @@ class RawPanel():
                         transport.abort()
             logger.info("Connection to %s:%s is closed", self.host, self.port)
             if purge:
-                await self.purge_panel_info()
+                self.purge_panel_info()
         finally:
             self.disconnect_in_progress = False
 
-    async def purge_panel_info(self):
+    def purge_panel_info(self):
         for key in self.info:
             self.info[key] = None
         logger.info("Panel info was purged")
@@ -912,13 +913,13 @@ class RawPanel():
         await self.disconnect(purge=True)
 
     async def set_panel_sleep(self):
-        s_t_msg = await self._set_sleep_timeout(1)  # 1s
+        s_t_msg = self._set_sleep_timeout(1)  # 1s
         await self.send(s_t_msg)
 
     async def reset_panel_sleep(self):
         if self.info['panel_sleep_timeout'] or \
            self.info['panel_sleep_timeout'] is None:
-            s_t_msg = await self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
+            s_t_msg = self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
             await self.send(s_t_msg)
         if self.info['isSleeping']:
             wakeup_msg = [{'Command': {'WakeUp': True}}]
@@ -931,8 +932,7 @@ class RawPanel():
                 if not self.info['isSleeping']:
                     if self.last_activity + self.sleep_timeout <= t:
                         await self.set_panel_sleep()
-                        await asyncio.sleep(10)
-                await asyncio.sleep(1)
+                await asyncio.sleep(10)
             except asyncio.CancelledError:
                 break
 
@@ -956,10 +956,14 @@ class RawPanel():
         else:
             params = hwcid, value
         try:
-            await self.commands[command](*params)
+            cmd = self.commands[command]
         except KeyError:
             logger.warning("Unhandled panel message: %s", request)
             return
+        # Handle both async and sync methods
+        if inspect.iscoroutinefunction(cmd):
+            await cmd(*params)
+        cmd(*params)
 
     async def process_buffers(self):
         logger.info("Processing buffered hardware changes...")
@@ -1095,7 +1099,7 @@ class RawPanel():
                                 )
                             except TypeError:
                                 pass
-                        msg.update(await self._set_mode(hwcid, **mode))
+                        msg.update(self._set_mode(hwcid, **mode))
                     try:
                         color = mapping[m]['color'].copy()
                     except KeyError:
@@ -1108,17 +1112,19 @@ class RawPanel():
                                 )
                             except TypeError:
                                 pass
-                        msg.update(await self._set_color(hwcid, **color))
+                        msg.update(self._set_color(hwcid, **color))
                 if m == 'fader':
-                    msg.update(await self._move_fader(hwcid, raw_value))
+                    msg.update(self._move_fader(hwcid, raw_value))
                 elif m == 'display':
                     try:
                         txt = mapping[m]['text']
                     except KeyError:
                         txt = {}
-                    msg.update(await self._set_text(hwcid,
-                                                    text1=db_value,
-                                                    **txt))
+                    msg.update(self._set_text(
+                        hwcid,
+                        text1=db_value,
+                        **txt,
+                    ))
                 await self.send(msg)
 
     async def process_meters_feedback(self, d):
@@ -1176,7 +1182,7 @@ class RawPanel():
                             except (KeyError, IndexError):
                                 pass
                             else:
-                                data1 = await self._level_to_raw(
+                                data1 = self._level_to_raw(
                                     data1,
                                     raw_db_range_mapping_meters,
                                     multiplier=multiplier
@@ -1186,7 +1192,7 @@ class RawPanel():
                             except (KeyError, IndexError):
                                 pass
                             else:
-                                data2 = await self._level_to_raw(
+                                data2 = self._level_to_raw(
                                     data2,
                                     raw_db_range_mapping_meters,
                                     multiplier=multiplier
@@ -1197,7 +1203,7 @@ class RawPanel():
                             except (KeyError, IndexError):
                                 pass
                             else:
-                                peak1 = await self._level_to_raw(
+                                peak1 = self._level_to_raw(
                                     peak1,
                                     raw_db_range_mapping_meters,
                                     multiplier=multiplier
@@ -1207,31 +1213,33 @@ class RawPanel():
                             except (KeyError, IndexError):
                                 pass
                             else:
-                                peak2 = await self._level_to_raw(
+                                peak2 = self._level_to_raw(
                                     peak2,
                                     raw_db_range_mapping_meters,
                                     multiplier=multiplier
                                 )
-                    msg.update(await self._set_audio_meter(hwcid,
-                                                           data1=data1,
-                                                           data2=data2,
-                                                           peak1=peak1,
-                                                           peak2=peak2,
-                                                           **audio_meter))
+                    msg.update(self._set_audio_meter(
+                        hwcid,
+                        data1=data1,
+                        data2=data2,
+                        peak1=peak1,
+                        peak2=peak2,
+                        **audio_meter,
+                    ))
                 await self.send(msg)
 
-    async def _level_to_raw(self, value, range_mapping, multiplier=1):
+    def _level_to_raw(self, value, range_mapping, multiplier=1):
         db = motu.level_to_db(float(value * multiplier / 1000))
         return motu.db_from_raw(db, range_mapping, reverse=True)
 
-    async def _get_sleep_timeout(self):
+    def _get_sleep_timeout(self):
         return [{"Command": {"GetSleepTimeout": True}}]
 
-    async def _set_sleep_timeout(self, timeout_ms):
+    def _set_sleep_timeout(self, timeout_ms):
         return [{"Command": {"SetSleepTimeout": {"Value": timeout_ms}}}]
 
-    async def _set_mode(self, hwcid, state=None,
-                        blink_pattern=None, output=False):
+    def _set_mode(self, hwcid, state=None,
+                  blink_pattern=None, output=False):
         msg = {
             "HWCIDs": [hwcid],
             "HWCMode": {}
@@ -1244,7 +1252,7 @@ class RawPanel():
             msg["HWCMode"]["Output"] = True
         return msg
 
-    async def _move_fader(self, hwcid, value):
+    def _move_fader(self, hwcid, value):
         msg = {
             "HWCIDs": [hwcid],
             "HWCExtended": {
@@ -1255,7 +1263,7 @@ class RawPanel():
             msg["HWCExtended"]["Value"] = value
         return msg
 
-    async def _set_color(self, hwcid, index=None, rgb=None):
+    def _set_color(self, hwcid, index=None, rgb=None):
         if rgb:
             color = {
                 "ColorRGB": rgb
@@ -1276,9 +1284,9 @@ class RawPanel():
         }
         return msg
 
-    async def _set_text(self, hwcid, value1=None, title=None,
-                        solid_header=False, text1=None,
-                        formatting=7):
+    def _set_text(self, hwcid, value1=None, title=None,
+                  solid_header=False, text1=None,
+                  formatting=7):
         msg = {
             "HWCIDs": [hwcid],
             "HWCText": {}
@@ -1295,10 +1303,10 @@ class RawPanel():
             msg["HWCText"]["Formatting"] = formatting
         return msg
 
-    async def _set_audio_meter(self, hwcid, meter_type=1, mono=0,
-                               title=None, w=176, h=32,
-                               data1=None, peak1=None,
-                               data2=None, peak2=None):
+    def _set_audio_meter(self, hwcid, meter_type=1, mono=0,
+                         title=None, w=176, h=32,
+                         data1=None, peak1=None,
+                         data2=None, peak2=None):
         msg = {
             "HWCIDs": [hwcid],
             "Processors": {
