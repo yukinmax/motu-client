@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 level_range = (0, 10 ** (12 / 20))
 
-# Motu long-poll hold is ~15s; client timeout slightly above that.
-DEFAULT_POLL_TIMEOUT_SEC = 20
-DEFAULT_MUTATE_TIMEOUT_SEC = 5
-DEFAULT_MUTATE_RETRIES = 1
+# Motu long-poll hold is ~10s; client timeout slightly above that.
+DEFAULT_POLL_TIMEOUT_SEC = 15
+DEFAULT_MUTATE_TIMEOUT_SEC = 2
+DEFAULT_MUTATE_RETRIES = 0
 DEFAULT_RETRY_INTERVAL_SEC = 10
 DEFAULT_HOSTNAME = "ultralite-avb.local"
 
