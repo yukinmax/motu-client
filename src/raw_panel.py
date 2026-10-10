@@ -876,9 +876,9 @@ class RawPanel():
         # handlers are started
         # TODO: Try await self.receive() for each expected response,
         # may not work with handle_requests() loop.
-        await self.send(self._get_panel_info)
-        await self.send(self._get_panel_map)
-        await self.send(self._get_panel_topology)
+        await self.send(self._get_panel_info())
+        await self.send(self._get_panel_map())
+        await self.send(self._get_panel_topology())
         await self.send(self._get_sleep_timeout())
         await self.send(self._set_sleep_timeout(self.sleep_timeout_ms))
         await self.send(self._set_sleep_mode(self.sleep_mode))
