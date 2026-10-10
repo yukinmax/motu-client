@@ -536,7 +536,7 @@ raw_db_range_mapping_meters = (
 
 class RawPanel():
     def __init__(self, host, port=9923, mode='ASCII', delay=0.01,
-                 sleep_timeout=0):
+                 sleep_timeout_minutes=0):
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
@@ -548,7 +548,7 @@ class RawPanel():
         self.writer = None
         self.sys_stat = None
         self.delay = delay
-        self.sleep_timeout = sleep_timeout
+        self.sleep_timeout_ms = sleep_timeout_minutes * 60000
         self.info = {
             "model": None,
             "serial": None,
@@ -850,7 +850,7 @@ class RawPanel():
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
         await self.send(hello_msg)
         await self.send(self._get_sleep_timeout())
-        await self.send(self._set_sleep_timeout(self.sleep_timeout))
+        await self.send(self._set_sleep_timeout(self.sleep_timeout_ms))
         # Yield for other background tasks
         await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)

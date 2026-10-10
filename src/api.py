@@ -43,7 +43,7 @@ motu_ms = motu.Meters(motu_http_client, "ultralite-avb.ynet")
 skaarhoj_panel = raw_panel.RawPanel(
     'waveboard.ynet',
     delay=0.001,
-    sleep_timeout=600,
+    sleep_timeout_minutes=10,
 )
 skaarhoj_panel.set_ds(motu_ds)
 skaarhoj_panel.set_ms(motu_ms)
