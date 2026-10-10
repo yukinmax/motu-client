@@ -922,10 +922,19 @@ class RawPanel():
         await self.send(s_t_msg)
 
     async def reset_panel_sleep(self, force: bool = False):
-        """Push a long panel sleep timeout override and wakeup message.
+        """ Internal panel sleep logic is broken, so the panel falls asleep
+        after 1hr no matter the sleep_timeout value set.
+        Sending wakeup messages doesn't reset 1hr timer.
+
+        Send wakeup message when panel is sleeping.
+        Push a long panel sleep timeout value to reset the timer.
 
         Throttled by default so high-rate feedback does not spam the panel.
         """
+        if self.info['isSleeping']:
+            wakeup_msg = self._wakeup()
+            await self.send(wakeup_msg)
+
         now = time.perf_counter()
         if (
             not force
@@ -934,18 +943,8 @@ class RawPanel():
             return
 
         sleep_timeout_override = 48 * 60 * 60 * 1000  # 48h
-        # Reset the panel sleep timeout value only if it was not initialized
-        # or set to a different value
-        if (
-            self.info['panel_sleep_timeout'] != sleep_timeout_override
-            or self.info['panel_sleep_timeout'] is None
-        ):
-            s_t_msg = self._set_sleep_timeout(sleep_timeout_override)
-            await self.send(s_t_msg)
-
-        # Send the wakeup command even if the panel is not sleeping
-        wakeup_msg = [{'Command': {'WakeUp': True}}]
-        await self.send(wakeup_msg)
+        s_t_msg = self._set_sleep_timeout(sleep_timeout_override)
+        await self.send(s_t_msg)
         self._last_sleep_reset = now
 
     async def handle_sleep_timeout(self):
@@ -1264,6 +1263,9 @@ class RawPanel():
     def _level_to_raw(self, value, range_mapping, multiplier=1):
         db = motu.level_to_db(float(value * multiplier / 1000))
         return motu.db_from_raw(db, range_mapping, reverse=True)
+
+    def _wakeup(self):
+        return [{'Command': {'WakeUp': True}}]
 
     def _get_sleep_timeout(self):
         return [{"Command": {"GetSleepTimeout": True}}]
