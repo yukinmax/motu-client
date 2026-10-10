@@ -968,7 +968,7 @@ class RawPanel():
 
     async def handle_request(self, request):
         try:
-            key, value = request.split('=')
+            key, value = request.split('=', 1)
         except ValueError:
             if not len(request):
                 logger.debug("Request is empty line")
