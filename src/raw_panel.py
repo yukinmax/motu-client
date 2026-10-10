@@ -561,6 +561,7 @@ class RawPanel():
         self.delay = delay
         self.sleep_timeout_ms = sleep_timeout_minutes * 60000
         self.sleep_mode = sleep_mode
+        self.sleep_screen_saver = sleep_screen_saver
         self.info = {
             "model": None,
             "serial": None,
