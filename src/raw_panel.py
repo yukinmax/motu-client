@@ -535,8 +535,19 @@ raw_db_range_mapping_meters = (
 
 
 class RawPanel():
-    def __init__(self, host, port=9923, mode='ASCII', delay=0.01,
-                 sleep_timeout_minutes=0):
+    def __init__(
+        self,
+        host,
+        port=9923,
+        mode='ASCII',
+        delay=0.01,
+        sleep_timeout_minutes=0,
+        sleep_mode=0,
+        sleep_screen_saver=0,
+        panel_brightness_leds=4,
+        panel_brightness_oleds=2,
+        panel_dimmed_gain=20,
+    ):
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
@@ -549,6 +560,7 @@ class RawPanel():
         self.sys_stat = None
         self.delay = delay
         self.sleep_timeout_ms = sleep_timeout_minutes * 60000
+        self.sleep_mode = sleep_mode
         self.info = {
             "model": None,
             "serial": None,
@@ -561,8 +573,13 @@ class RawPanel():
             "isSleeping": None,
             "panel_sleep_timeout": None,
             "EnvironmenalHealth": None,
+            "DimmedGain": None,
         }
         self.panel_map = {}
+        self.panelTopology = {"svgbase": None, "HWC": None}
+        self.panel_brightness_leds = panel_brightness_leds
+        self.panel_brightness_oleds = panel_brightness_oleds
+        self.panel_dimmed_gain = panel_dimmed_gain
         self.commands = {
             "SysStat": self._update_sys_stat,
             "_model": self._update_model,
@@ -575,7 +592,10 @@ class RawPanel():
             "_support": self._update_support,
             "_isSleeping": self._update_isSleeping,
             "_sleepTimer": self._update_panel_sleep_timeout,
+            "_panelTopology_svgbase": self._update_panelTopology_svgbase,
+            "_panelTopology_HWC": self._update_panelTopology_HWC,
             "EnvironmentalHealth": self._update_EnvironmentalHealth,
+            "DimmedGain": self._update_DimmedGain,
             "map": self._update_map,
             "HWC": self._hardware_change_schedule
         }
@@ -646,9 +666,18 @@ class RawPanel():
     def _update_EnvironmentalHealth(self, value):
         self.info['EnvironmentalHealth'] = value
 
+    def _update_DimmedGain(self, value):
+        self.info["DimmedGain"] = value
+
     def _update_map(self, value):
         k, v = value.split(":")
         self.panel_map[k] = v
+
+    def _update_panelTopology_svgbase(self, value):
+        self.panelTopology["svgbase"] = value
+
+    def _update_panelTopology_HWC(self, value):
+        self.panelTopology["HWC"] = json.loads(value)
 
     def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
@@ -845,12 +874,20 @@ class RawPanel():
     async def initialize(self):
         # Responses from the panel are handled only after the paneli
         # handlers are started
-        # TODO: Try await self.receive() after each send, may not work
-        # with handle_requests() loop.
-        hello_msg = [{'Command': {'SendPanelInfo': True}}]
-        await self.send(hello_msg)
+        # TODO: Try await self.receive() for each expected response,
+        # may not work with handle_requests() loop.
+        await self.send(self._get_panel_info)
+        await self.send(self._get_panel_map)
+        await self.send(self._get_panel_topology)
         await self.send(self._get_sleep_timeout())
         await self.send(self._set_sleep_timeout(self.sleep_timeout_ms))
+        await self.send(self._set_sleep_mode(self.sleep_mode))
+        await self.send(self._set_sleep_screen_saver(self.sleep_screen_saver))
+        await self.send(self._set_panel_brightness(
+            self.panel_brightness_leds,
+            self.panel_brightness_oleds,
+        ))
+        await self.send(self._set_dimmed_gain(self.panel_dimmed_gain))
         # Yield for other background tasks
         await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)
@@ -1230,14 +1267,58 @@ class RawPanel():
         db = motu.level_to_db(float(value * multiplier / 1000))
         return motu.db_from_raw(db, range_mapping, reverse=True)
 
+    def _get_panel_info(self):
+        return [{"Command": {"SendPanelInfo": True}}]
+
+    def _get_panel_map(self):
+        return [{"Command": {"ReportHWCavailability": True}}]
+
+    def _get_panel_topology(self):
+        return [{"Command": {"SendPanelTopology": True}}]
+
     def _wakeup(self):
-        return [{'Command': {'WakeUp': True}}]
+        return [{"Command": {"WakeUp": True}}]
 
     def _get_sleep_timeout(self):
         return [{"Command": {"GetSleepTimeout": True}}]
 
     def _set_sleep_timeout(self, timeout_ms):
         return [{"Command": {"SetSleepTimeout": {"Value": timeout_ms}}}]
+
+    def _set_sleep_mode(self, value: int = 0):
+        """
+        0 = FireWorks (Default) - LEDs will animate on the panel
+        1 = Buttons Off
+        """
+        return [{"Command": {"SetSleepMode": {"Value": value}}}]
+
+    def _set_sleep_screen_saver(self, value: int = 0):
+        """
+        0 = "Wake Up On Key Press" message (default)
+        1 = "Sheep And Goats" - Classic UniSketch funtime screen saver
+        2 = "Save The Oleds" message
+        3 = Just Dimmed - keeps content, just dims the panel
+        """
+        return [{"Command": {"SetSleepScreenSaver": {"Value": value}}}]
+
+    def _set_dimmed_gain(self, value: int = 0):
+        """
+        Sets the gain level (0, 1-64) for the dimmed button state on the panel.
+        Full gain is 64, a good dimmed value is around 4-16.
+        Setting DimmedGain to zero will reset it to the panel defaults (10-16).
+        """
+        return [{"Command": {"SetDimmedGain": {"Value": value}}}]
+
+    def _set_panel_brightness(self, x: int = 8, y: int | None = None):
+        """
+        Brightness for LEDs (x) and OLEDs (y). Value range 0-8.
+        """
+        if y is None:
+            y = x
+            return [{"Command": {"PanelBrightness": {
+                "LEDs": {"Value": x},
+                "OLEDs": {"Value": y}
+            }}}]
 
     def _set_mode(self, hwcid, state=None,
                   blink_pattern=None, output=False):
