@@ -582,9 +582,9 @@ class RawPanel():
         self.hw_change_buffer = {}
         self.ds = None
         self.ms = None
-        self.last_activity = time.perf_counter()
-        self._last_sleep_reset = 0.0
-        self._sleep_reset_min_interval = 60.0  # seconds
+        self.last_activity = 0.0
+        self._last_wakeup = 0.0
+        self._wakeup_min_interval = 10.0  # seconds
 
     def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -659,7 +659,7 @@ class RawPanel():
 
     async def _hardware_change_process(self, hwcid, value):
         # TODO: Split and refactor
-        await self.reset_panel_sleep()
+        await self.wakeup()
         try:
             path = tmp_mapping[hwcid]['path']
         except KeyError:
@@ -845,13 +845,14 @@ class RawPanel():
     async def initialize(self):
         # Responses from the panel are handled only after the paneli
         # handlers are started
+        # TODO: Try await self.receive() after each send, may not work
+        # with handle_requests() loop.
         hello_msg = [{'Command': {'SendPanelInfo': True}}]
         await self.send(hello_msg)
-        s_t_msg = self._get_sleep_timeout()
-        await self.send(s_t_msg)
-        await self.reset_panel_sleep(force=True)
-        #  TODO: Figure out a way to only log this after response is
-        #  received from the panel
+        await self.send(self._get_sleep_timeout())
+        await self.send(self._set_sleep_timeout(self.sleep_timeout))
+        # Yield for other background tasks
+        await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)
 
     async def disconnect(self, purge=False):
@@ -917,52 +918,15 @@ class RawPanel():
             return
         await self.disconnect(purge=True)
 
-    async def set_panel_sleep(self):
-        s_t_msg = self._set_sleep_timeout(1)  # 1s
-        await self.send(s_t_msg)
-
-    async def reset_panel_sleep(self, force: bool = False):
-        """ Internal panel sleep logic is broken, so the panel falls asleep
-        after 1hr no matter the sleep_timeout value set.
-        Sending wakeup messages doesn't reset 1hr timer.
-
-        Send wakeup message when panel is sleeping.
-        Push a long panel sleep timeout value to reset the timer.
+    async def wakeup(self, force: bool = False):
+        """Send wakeup message.
 
         Throttled by default so high-rate feedback does not spam the panel.
         """
-        if self.info['isSleeping']:
-            wakeup_msg = self._wakeup()
-            await self.send(wakeup_msg)
-
         now = time.perf_counter()
-        if (
-            not force
-            and (now - self._last_sleep_reset) < self._sleep_reset_min_interval
-        ):
-            return
-
-        sleep_timeout_override = 48 * 60 * 60 * 1000  # 48h
-        s_t_msg = self._set_sleep_timeout(sleep_timeout_override)
-        await self.send(s_t_msg)
-        self._last_sleep_reset = now
-
-    async def handle_sleep_timeout(self):
-        logger.info("Panel external sleep timer started")
-        while not self._stopped:
-            try:
-                t = time.perf_counter()
-                if not self.info['isSleeping']:
-                    if self.last_activity + self.sleep_timeout <= t:
-                        logger.info(
-                            "External sleep timeout reached; "
-                            "putting panel to sleep"
-                        )
-                        await self.set_panel_sleep()
-                await asyncio.sleep(10)
-            except asyncio.CancelledError:
-                break
-        logger.info("Panel external sleep timer stopped")
+        if force or (now - self._last_wakeup) > self._wakeup_min_interval:
+            await self.send(self._wakeup())
+            self._last_wakeup = now
 
     async def handle_request(self, request):
         try:
@@ -1096,6 +1060,8 @@ class RawPanel():
 
     async def process_data_feedback(self, d):
         # TODO: Split and refactor
+        # TODO: Consider waking the panel
+        # TODO: Batch the events into 1 message
         for k, v in d.items():
             try:
                 mapping = feedback_map[k]
@@ -1162,7 +1128,7 @@ class RawPanel():
         # TODO: Split and refactor
         # Currently sends data for all meters even if only 1 meter data changed
         self.last_activity = time.perf_counter()
-        await self.reset_panel_sleep()
+        await self.wakeup()
         msg = {}
         base_path = 'mix/level'
         try:

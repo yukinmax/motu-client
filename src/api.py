@@ -65,7 +65,6 @@ async def startup():
     await skaarhoj_panel.connect()
     app.add_background_task(skaarhoj_panel.handle_requests)
     app.add_background_task(skaarhoj_panel.process_buffers)
-    app.add_background_task(skaarhoj_panel.handle_sleep_timeout)
     app.add_background_task(motu_ds.poll, diff_check=False)
     app.add_background_task(motu_ms.poll)
 
