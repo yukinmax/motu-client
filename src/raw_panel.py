@@ -1316,10 +1316,7 @@ class RawPanel():
         """
         if y is None:
             y = x
-        return [{"Command": {"PanelBrightness": {
-            "LEDs": {"Value": x},
-            "OLEDs": {"Value": y}
-        }}}]
+        return [{"Command": {"PanelBrightness": {"LEDs": x, "OLEDs": y}}}]
 
     def _set_mode(self, hwcid, state=None,
                   blink_pattern=None, output=False):
