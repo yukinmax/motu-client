@@ -85,6 +85,7 @@ def db_from_raw(
 
 
 def dict_diff(d_old: dict, d_new: dict) -> dict:
+    # TODO: Replace with the dictionary comprehension
     return dict(set(d_new.items()) - set(d_old.items()))
 
 
@@ -236,7 +237,7 @@ class Store:
         self.etag: str | None = None
         self.client_id: int | None = None
         self.data: dict = {}
-        self.change_handler = None
+        self._change_controller = None
         self._stopped = False
 
     def _url(self) -> str:
@@ -284,8 +285,10 @@ class Store:
         if data_diff:
             self.data.update(data_diff)
             logger.debug("Modified: %s -> %s", self.base_path, data_diff)
-            if self.change_handler and handle_changes:
-                await self.change_handler(data_diff)
+            if self._change_controller and handle_changes:
+                await self._change_controller.on_change(
+                    data_diff, source=self.base_path
+                )
             return data_diff
         return None
 
@@ -314,8 +317,9 @@ class Store:
             self.hostname,
         )
 
-    def set_change_handler(self, handler) -> None:
-        self.change_handler = handler
+    def set_change_controller(self, controller) -> None:
+        """Attach controller implementing on_change(data, *, source)."""
+        self._change_controller = controller
 
 
 class DataStore(Store):
@@ -339,15 +343,21 @@ class DataStore(Store):
             retries=DEFAULT_MUTATE_RETRIES,
             timeout=DEFAULT_MUTATE_TIMEOUT_SEC,
         )
+        # Check if path value was actually modified
         if response is not None:
             data_diff = {path: value}
             self.data.update(data_diff)
             logger.debug("Modified: %s -> %s", self.base_path, data_diff)
-            if self.change_handler:
-                await self.change_handler({path: value})
+            if self._change_controller:
+                # TODO: Avoid sending feedback for the fader
+                # that caused the data change to eliminate feedback loop.
+                await self._change_controller.on_change(
+                    {path: value}, source=self.base_path
+                )
         return response
 
     async def toggle(self, path: str):
+        # TODO: Refactor the return values
         try:
             s = self.get(path)
         except KeyError:
@@ -398,7 +408,9 @@ class Meters(Store):
         )
         if data_diff:
             data_diff.update(self.update_peaks())
-            if self.change_handler and handle_changes:
-                await self.change_handler(data_diff)
+            if self._change_controller and handle_changes:
+                await self._change_controller.on_change(
+                    data_diff, source=self.base_path
+                )
             return data_diff
         return None

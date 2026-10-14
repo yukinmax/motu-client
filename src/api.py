@@ -6,6 +6,7 @@ from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
 import motu
 import raw_panel
+import binding
 
 
 _VALID_LOG_LEVELS = {
@@ -45,15 +46,31 @@ skaarhoj_panel = raw_panel.RawPanel(
     delay=0.001,
     sleep_timeout_minutes=10,
 )
+
+control_map = binding.ControlMap.from_raw(raw_panel.tmp_mapping)
+feedback_map = binding.FeedbackMap.from_raw(raw_panel.feedback_map)
+
+motu_controller = binding.MotuController(
+    control_map,
+    range_mapping=raw_panel.raw_db_range_mapping_faders,
+)
+panel_controller = binding.PanelController(feedback_map)
+
+motu_controller.set_datastore(motu_ds)
+skaarhoj_panel.set_change_controller(motu_controller)
+
+# Should be removed after refactor
 skaarhoj_panel.set_ds(motu_ds)
 skaarhoj_panel.set_ms(motu_ms)
-motu_ds.set_change_handler(skaarhoj_panel.process_data_feedback)
-motu_ms.set_change_handler(skaarhoj_panel.process_meters_feedback)
+
+panel_controller.set_panel(skaarhoj_panel)
+motu_ds.set_change_controller(panel_controller)
+motu_ms.set_change_controller(panel_controller)
 
 app.asgi_app = MetricsMiddleware(app.asgi_app)
 app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
-raw_db_range_mapping = raw_panel.raw_db_range_mapping
+raw_db_range_mapping = raw_panel.raw_db_range_mapping_faders
 
 
 @app.before_serving

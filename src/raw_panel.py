@@ -8,6 +8,7 @@ import motu
 import socket
 import time
 import os.path
+from binding import SOURCE_RAW_PANEL
 
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,8 @@ tmp_mapping = {
         'path': 'mix/group/0/matrix/solo',
     },
     '80.1': {
-        'path': 'mix/monitor/0/override/0',
+        'path': 'mix/monitor/0/override',
+        'override_index': 0,
     },
     '63.4': {
         'path': 'mix/chan/0/matrix/aux/0/send',
@@ -522,7 +524,7 @@ feedback_map = {
     }
 }
 
-raw_db_range_mapping = (
+raw_db_range_mapping_faders = (
     (0, -math.inf),
     ((1, 5), (-120, -60)),
     ((5, 125), (-60, -30)),
@@ -532,6 +534,15 @@ raw_db_range_mapping_meters = (
     (0, -math.inf),
     ((1, 1000), (-60, 12)),
 )
+
+
+def normalize_hwc_value(value: str) -> str:
+    """Panel protocol: strip optional prefix ('State:Down' → 'Down')."""
+    try:
+        _prefix, v = value.split(':', 1)
+        return v
+    except ValueError:
+        return value
 
 
 class RawPanel():
@@ -606,6 +617,7 @@ class RawPanel():
         self.last_activity = 0.0
         self._last_wakeup = 0.0
         self._wakeup_min_interval = 10.0  # seconds
+        self._change_controller = None
 
     def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -650,6 +662,7 @@ class RawPanel():
             # Init the panel feedback only after panels wakes up
             # or initializes
             await asyncio.sleep(1.0)
+            # TODO: Figure out how to call this from PanelController
             await self.init_feedback()
 
     def _update_panel_sleep_timeout(self, value):
@@ -688,71 +701,16 @@ class RawPanel():
         change['value'] = value
 
     async def _hardware_change_process(self, hwcid, value):
-        # TODO: Split and refactor
         await self.wakeup()
-        try:
-            path = tmp_mapping[hwcid]['path']
-        except KeyError:
-            logger.debug("hwcid %s is not mapped", hwcid)
+        if self._change_controller is None:
+            logger.debug("No change controller; ignore hwcid %s", hwcid)
             return
-        path_match = re.search(r"(\w+)\/?(\d*)$", path)
-        path_type = path_match.group(1)
-        try:
-            s, v = value.split(':')
-        except ValueError:
-            v = value
-        logger.debug("hwcid %s is set to %s", hwcid, v)
-        if path_type in ('send', 'fader'):
-            try:
-                v = int(v)
-            except ValueError:
-                if re.match(r"Down", v):
-                    v = self.ds.get(path)
-                    try:
-                        dv = tmp_mapping[hwcid]['default_level']
-                    except KeyError:
-                        logger.debug("No default value for hwcid %s", hwcid)
-                        v = 1
-                    else:
-                        dv = motu.level_from_db(dv)
-                        if v != dv:
-                            v = dv
-                        else:
-                            v = 1
-                else:
-                    return
-            else:
-                v = motu.db_from_raw(v, raw_db_range_mapping)
-                v = motu.level_from_db(v)
-            if self.ds:
-                await self.ds.set(path, v)
-        elif path_type in ('mute',):
-            if re.match(r"Down", v):
-                if self.ds:
-                    await self.ds.toggle(path)
-        elif path_type == 'solo':
-            if re.match(r"Down", v):
-                if self.ds:
-                    if self.ds.get('mix/monitor/0/override') != -1.0:
-                        await self.ds.set(path, 1.0)
-                    else:
-                        await self.ds.toggle(path)
-                    await self.ds.set('mix/monitor/0/override', -1.0)
-        elif path_type in ('override',):
-            if re.match(r"Down", v):
-                if self.ds:
-                    try:
-                        override = 1024 + float(path_match.group(2))
-                    except ValueError:
-                        logger.warning("Configuration error for HWCID %s",
-                                       hwcid)
-                        return
-                    else:
-                        path = os.path.dirname(path)
-                    if self.ds.get(path) == override:
-                        await self.ds.set(path, -1.0)
-                    else:
-                        await self.ds.set(path, override)
+        normalized = normalize_hwc_value(value)
+        await self._change_controller.on_change(
+            {"hwcid": str(hwcid), "value": normalized},
+            source=SOURCE_RAW_PANEL,
+        )
+
 
     def _configure_socket(self, writer: asyncio.StreamWriter) -> None:
         """Keepalive for dead-peer detection;
@@ -783,12 +741,21 @@ class RawPanel():
         """Signal long-running loops to exit; blocks reconnect."""
         self._stopped = True
 
-    def set_ds(self, datastore):
+    # TODO: Move to PanelController
+    def set_ds(self, datastore) -> None:
+        """Motu datastore for init_feedback reads / displays."""
         self.ds = datastore
 
-    def set_ms(self, meters):
+    # TODO: Move to PanelController
+    def set_ms(self, meters) -> None:
+        """Motu meters for init_feedback reads."""
         self.ms = meters
 
+    def set_change_controller(self, controller) -> None:
+        """Attach controller implementing on_change(data, *, source)."""
+        self._change_controller = controller
+
+    # TODO: Move to PanelController and refactor
     async def init_feedback(self):
         if not self.ds:
             logger.warning("Datastore should be set first")
@@ -814,9 +781,9 @@ class RawPanel():
             else:
                 dd[path] = v
         logger.debug("Init datastore feedback %s", dd)
-        await self.process_data_feedback(dd)
+        await self._process_data_feedback(dd)
         logger.debug("Init meters feedback %s", md)
-        await self.process_meters_feedback(md)
+        await self._process_meters_feedback(md)
 
     async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
         if self._stopped:
@@ -873,7 +840,7 @@ class RawPanel():
             await self.initialize()
 
     async def initialize(self):
-        # Responses from the panel are handled only after the paneli
+        # Responses from the panel are handled only after the panel
         # handlers are started
         # TODO: Try await self.receive() for each expected response,
         # may not work with handle_requests() loop.
@@ -1096,8 +1063,8 @@ class RawPanel():
         logger.debug(record)
         return record
 
-    async def process_data_feedback(self, d):
-        # TODO: Split and refactor
+    async def _process_data_feedback(self, d):
+        # TODO: Split, refactor and move to PanelController
         # TODO: Consider waking the panel
         # TODO: Batch the events into 1 message
         for k, v in d.items():
@@ -1111,7 +1078,7 @@ class RawPanel():
                 db_value = motu.level_to_db(float(v))
                 raw_value = motu.db_from_raw(
                     db_value,
-                    raw_db_range_mapping,
+                    raw_db_range_mapping_faders,
                     reverse=True
                 )
             for m in mapping:
@@ -1162,8 +1129,8 @@ class RawPanel():
                     ))
                 await self.send(msg)
 
-    async def process_meters_feedback(self, d):
-        # TODO: Split and refactor
+    async def _process_meters_feedback(self, d):
+        # TODO: Split, refactor and move to PanelController
         # Currently sends data for all meters even if only 1 meter data changed
         self.last_activity = time.perf_counter()
         await self.wakeup()
@@ -1264,10 +1231,12 @@ class RawPanel():
                     ))
                 await self.send(msg)
 
+    # TODO: Move to PanelController
     def _level_to_raw(self, value, range_mapping, multiplier=1):
         db = motu.level_to_db(float(value * multiplier / 1000))
         return motu.db_from_raw(db, range_mapping, reverse=True)
 
+    # TODO: Refactor message building logic
     def _get_panel_info(self):
         return [{"Command": {"SendPanelInfo": True}}]
 
