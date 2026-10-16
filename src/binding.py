@@ -233,17 +233,24 @@ class MotuController:
 class PanelController:
     """Motu → panel feedback.
 
-    Public path: on_change / init_feedback.
-    Private: _process_data_feedback / _process_meters_feedback — currently
-    delegate to RawPanel._process_*).
+    Public: on_change, init_feedback, set_panel, set_datastore, set_meters
+    Private: _process_* (delegate to RawPanel until bodies move here)
     """
 
     def __init__(self, feedback_map: FeedbackMap):
         self._map = feedback_map
         self._panel = None
+        self._ds = None
+        self._ms = None
 
     def set_panel(self, panel) -> None:
         self._panel = panel
+
+    def set_datastore(self, datastore) -> None:
+        self._ds = datastore
+
+    def set_meters(self, meters) -> None:
+        self._ms = meters
 
     async def on_change(self, data: dict, *, source: str) -> None:
         if self._panel is None:
@@ -255,6 +262,39 @@ class PanelController:
             await self._process_meters_feedback(data)
         else:
             logger.debug("PanelController: ignore source=%s", source)
+
+    async def init_feedback(self) -> None:
+        """Seed panel from current Motu snapshots."""
+        if self._panel is None:
+            logger.warning("PanelController.init_feedback: no panel")
+            return
+        if not self._ds:
+            logger.warning("PanelController.init_feedback: no datastore")
+            return
+        if not self._ms:
+            logger.warning("PanelController.init_feedback: no meters")
+            return
+        logger.info("Initializing the panel feedback")
+        dd = {}
+        md = {}
+        for path in self._map.paths():
+            try:
+                v = self._ds.get(path)
+            except KeyError:
+                for i in [str(s) for s in range(15)] + ["peaks"]:
+                    try:
+                        v = self._ms.get(f"{path}/{i}")
+                    except KeyError:
+                        logger.warning("Path %s is not available", path)
+                        continue
+                    else:
+                        md[path] = v
+            else:
+                dd[path] = v
+        logger.debug("Init datastore feedback %s", dd)
+        await self._process_data_feedback(dd)
+        logger.debug("Init meters feedback %s", md)
+        await self._process_meters_feedback(md)
 
     async def _process_data_feedback(self, data: dict) -> None:
         await self._panel._process_data_feedback(data)

@@ -618,6 +618,7 @@ class RawPanel():
         self._last_wakeup = 0.0
         self._wakeup_min_interval = 10.0  # seconds
         self._change_controller = None
+        self._feedback_controller = None
 
     def _update_sys_stat(self, value):
         self.sys_stat = value
@@ -659,11 +660,10 @@ class RawPanel():
         logger.info("Sleeping: %s", sleep_state_str)
         self.info['isSleeping'] = new_state
         if not new_state and (prev_state or prev_state is None):
-            # Init the panel feedback only after panels wakes up
-            # or initializes
+            # Init feedback only after panel wakes up or initializes
             await asyncio.sleep(1.0)
-            # TODO: Figure out how to call this from PanelController
-            await self.init_feedback()
+            if self._feedback_controller is not None:
+                await self._feedback_controller.init_feedback()
 
     def _update_panel_sleep_timeout(self, value):
         prev_state = self.info['panel_sleep_timeout']
@@ -741,49 +741,22 @@ class RawPanel():
         """Signal long-running loops to exit; blocks reconnect."""
         self._stopped = True
 
-    # TODO: Move to PanelController
     def set_ds(self, datastore) -> None:
-        """Motu datastore for init_feedback reads / displays."""
+        """Datastore ref for meters feedback (fader/mute multiplier).
+        """
         self.ds = datastore
 
-    # TODO: Move to PanelController
     def set_ms(self, meters) -> None:
-        """Motu meters for init_feedback reads."""
+        """Meters ref; to be removed."""
         self.ms = meters
 
     def set_change_controller(self, controller) -> None:
         """Attach controller implementing on_change(data, *, source)."""
         self._change_controller = controller
 
-    # TODO: Move to PanelController and refactor
-    async def init_feedback(self):
-        if not self.ds:
-            logger.warning("Datastore should be set first")
-            return
-        if not self.ms:
-            logger.warning("Meters should be set first")
-            return
-        logger.info("Initializing the panel feedback")
-        dd = {}
-        md = {}
-        for path in feedback_map:
-            try:
-                v = self.ds.get(path)
-            except KeyError:
-                for i in [str(s) for s in range(15)] + ['peaks']:
-                    try:
-                        v = self.ms.get(os.path.join(path, i))
-                    except KeyError:
-                        logger.warning("Path %s is not available", path)
-                        continue
-                    else:
-                        md[path] = v
-            else:
-                dd[path] = v
-        logger.debug("Init datastore feedback %s", dd)
-        await self._process_data_feedback(dd)
-        logger.debug("Init meters feedback %s", md)
-        await self._process_meters_feedback(md)
+    def set_feedback_controller(self, controller) -> None:
+        """Attach controller implementing init_feedback()."""
+        self._feedback_controller = controller
 
     async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
         if self._stopped:

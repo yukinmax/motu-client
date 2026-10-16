@@ -59,11 +59,14 @@ panel_controller = binding.PanelController(feedback_map)
 motu_controller.set_datastore(motu_ds)
 skaarhoj_panel.set_change_controller(motu_controller)
 
-# Should be removed after refactor
-skaarhoj_panel.set_ds(motu_ds)
-skaarhoj_panel.set_ms(motu_ms)
-
 panel_controller.set_panel(skaarhoj_panel)
+panel_controller.set_datastore(motu_ds)
+panel_controller.set_meters(motu_ms)
+skaarhoj_panel.set_feedback_controller(panel_controller)
+
+# Temporary: meters feedback still reads panel.ds for fader/mute multiplier
+skaarhoj_panel.set_ds(motu_ds)
+
 motu_ds.set_change_controller(panel_controller)
 motu_ms.set_change_controller(panel_controller)
 
