@@ -277,7 +277,7 @@ class PanelController:
         logger.info("Initializing the panel feedback")
         dd = {}
         md = {}
-        for path in self._map.paths():
+        for path in self._map.keys():
             try:
                 v = self._ds.get(path)
             except KeyError:
