@@ -54,7 +54,11 @@ motu_controller = binding.MotuController(
     control_map,
     range_mapping=raw_panel.raw_db_range_mapping_faders,
 )
-panel_controller = binding.PanelController(feedback_map)
+panel_controller = binding.PanelController(
+    feedback_map,
+    faders_range_mapping=raw_panel.raw_db_range_mapping_faders,
+    meters_range_mapping=raw_panel.raw_db_range_mapping_meters,
+)
 
 motu_controller.set_datastore(motu_ds)
 skaarhoj_panel.set_change_controller(motu_controller)
@@ -64,8 +68,6 @@ panel_controller.set_datastore(motu_ds)
 panel_controller.set_meters(motu_ms)
 skaarhoj_panel.set_feedback_controller(panel_controller)
 
-# Temporary: meters feedback still reads panel.ds for fader/mute multiplier
-skaarhoj_panel.set_ds(motu_ds)
 
 motu_ds.set_change_controller(panel_controller)
 motu_ms.set_change_controller(panel_controller)

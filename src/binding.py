@@ -14,6 +14,8 @@ Sources:
 from __future__ import annotations
 
 import logging
+import os
+import time
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Tuple
@@ -234,11 +236,19 @@ class PanelController:
     """Motu → panel feedback.
 
     Public: on_change, init_feedback, set_panel, set_datastore, set_meters
-    Private: _process_* (delegate to RawPanel until bodies move here)
+    Private: _process_data_feedback, _process_meters_feedback
     """
 
-    def __init__(self, feedback_map: FeedbackMap):
+    def __init__(
+        self,
+        feedback_map: FeedbackMap,
+        *,
+        faders_range_mapping: tuple,
+        meters_range_mapping: tuple,
+    ):
         self._map = feedback_map
+        self._faders_range_mapping = faders_range_mapping
+        self._meters_range_mapping = meters_range_mapping
         self._panel = None
         self._ds = None
         self._ms = None
@@ -296,8 +306,172 @@ class PanelController:
         logger.debug("Init meters feedback %s", md)
         await self._process_meters_feedback(md)
 
-    async def _process_data_feedback(self, data: dict) -> None:
-        await self._panel._process_data_feedback(data)
+    async def _process_data_feedback(self, d):
+        # TODO: Split and refactor
+        # TODO: Consider waking the panel
+        # TODO: Batch the events into 1 message
+        for k, v in d.items():
+            mapping = self._map.resolve(k)
+            if mapping is None:
+                logger.debug("path %s is not mapped", k)
+                continue
+            t = re.search(r"\w+$", k)[0]
+            if t in ('send', 'fader'):
+                db_value = motu.level_to_db(float(v))
+                raw_value = motu.db_from_raw(
+                    db_value,
+                    self._faders_range_mapping,
+                    reverse=True
+                )
+            for m in mapping:
+                hwcid = mapping[m]['hwcid']
+                msg = {}
+                if m.startswith(('button', 'fader')):
+                    try:
+                        k = v == mapping[m]['value']
+                    except KeyError:
+                        k = v
+                    try:
+                        mode = mapping[m]['mode'].copy()
+                    except KeyError:
+                        pass
+                    else:
+                        for mode_type, mode_value in mode.items():
+                            try:
+                                mode[mode_type] = (
+                                    mode_value[0] if k else mode_value[1]
+                                )
+                            except TypeError:
+                                pass
+                        msg.update(self._panel._set_mode(hwcid, **mode))
+                    try:
+                        color = mapping[m]['color'].copy()
+                    except KeyError:
+                        pass
+                    else:
+                        for color_type, color_value in color.items():
+                            try:
+                                color[color_type] = (
+                                    color_value[0] if k else color_value[1]
+                                )
+                            except TypeError:
+                                pass
+                        msg.update(self._panel._set_color(hwcid, **color))
+                if m == 'fader':
+                    msg.update(self._panel._move_fader(hwcid, raw_value))
+                elif m == 'display':
+                    try:
+                        txt = mapping[m]['text']
+                    except KeyError:
+                        txt = {}
+                    msg.update(self._panel._set_text(
+                        hwcid,
+                        text1=db_value,
+                        **txt,
+                    ))
+                await self._panel.send(msg)
 
-    async def _process_meters_feedback(self, data: dict) -> None:
-        await self._panel._process_meters_feedback(data)
+    async def _process_meters_feedback(self, d):
+        # TODO: Split and refactor
+        # Currently sends data for all meters even if only 1 meter data changed
+        self._panel.last_activity = time.perf_counter()
+        await self._panel.wakeup()
+        msg = {}
+        base_path = 'mix/level'
+        mapping = self._map.resolve(base_path)
+        if mapping is None:
+            logger.warning("path %s is not mapped", base_path)
+            return
+        for m in mapping:
+            hwcid = mapping[m]['hwcid']
+            data1 = None
+            data2 = None
+            peak1 = None
+            peak2 = None
+            multiplier = 1
+            if re.match(r"display\d+$", m):
+                try:
+                    pre = mapping[m]['pre_fader']
+                except KeyError:
+                    pass
+                else:
+                    if not pre:
+                        try:
+                            multiplier = self._ds.get(
+                                mapping[m]['fader_path']
+                            ) * int(not self._ds.get(
+                                mapping[m]['mute_path'])
+                            )
+                        except KeyError:
+                            logger.warning(
+                                "fader_path and mute_path should be \
+                                configured if pre_fader is set to False"
+                            )
+                try:
+                    audio_meter = mapping[m]['audio_meter']
+                except KeyError:
+                    pass
+                else:
+                    for k, v in d.items():
+                        if not k.startswith(base_path):
+                            logger.debug("Skipping feedback: %s: %s", k, v)
+                            continue
+                        try:
+                            k, s = os.path.split(k)
+                        except Exception:
+                            logger.warning("Can't split %s", k)
+                        if s != 'peaks':
+                            try:
+                                data1 = v[mapping[m]['channels'][0]]
+                            except (KeyError, IndexError):
+                                pass
+                            else:
+                                data1 = self._level_to_raw(
+                                    data1,
+                                    self._meters_range_mapping,
+                                    multiplier=multiplier
+                                )
+                            try:
+                                data2 = v[mapping[m]['channels'][1]]
+                            except (KeyError, IndexError):
+                                pass
+                            else:
+                                data2 = self._level_to_raw(
+                                    data2,
+                                    self._meters_range_mapping,
+                                    multiplier=multiplier
+                                )
+                        else:
+                            try:
+                                peak1 = v[mapping[m]['channels'][0]]
+                            except (KeyError, IndexError):
+                                pass
+                            else:
+                                peak1 = self._level_to_raw(
+                                    peak1,
+                                    self._meters_range_mapping,
+                                    multiplier=multiplier
+                                )
+                            try:
+                                peak2 = v[mapping[m]['channels'][1]]
+                            except (KeyError, IndexError):
+                                pass
+                            else:
+                                peak2 = self._level_to_raw(
+                                    peak2,
+                                    self._meters_range_mapping,
+                                    multiplier=multiplier
+                                )
+                    msg.update(self._panel._set_audio_meter(
+                        hwcid,
+                        data1=data1,
+                        data2=data2,
+                        peak1=peak1,
+                        peak2=peak2,
+                        **audio_meter,
+                    ))
+                await self._panel.send(msg)
+
+    def _level_to_raw(self, value, range_mapping, multiplier=1):
+        db = motu.level_to_db(float(value * multiplier / 1000))
+        return motu.db_from_raw(db, range_mapping, reverse=True)
