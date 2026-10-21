@@ -319,12 +319,6 @@ class PanelController:
             if target.kind == "meter"
         )
 
-    def _seed_meter_multipliers(self) -> None:
-        for target in self._meter_targets():
-            self._meter_multipliers[target.hwcid] = (
-                self._calculate_meter_multiplier(target)
-            )
-
     def _update_meter_multiplier_for_path(self, path: str) -> None:
         for target in self._meter_targets():
             if path not in (target.fader_path, target.mute_path):
@@ -374,7 +368,6 @@ class PanelController:
                 dd[path] = v
         logger.debug("Init datastore feedback %s", dd)
         await self._process_data_feedback(dd)
-        self._seed_meter_multipliers()
         logger.debug("Init meters feedback %s", md)
         await self._process_meters_feedback(md)
 
@@ -519,10 +512,8 @@ class PanelController:
             try:
                 multiplier = self._meter_multipliers[target.hwcid]
             except KeyError:
-                logger.warning(
-                    "No cached multiplier for hwcid %s", target.hwcid
-                )
-                multiplier = 1.0
+                multiplier = self._calculate_meter_multiplier(target)
+                self._meter_multipliers[target.hwcid] = multiplier
             slots = []
             for samples in (level_samples, peak_samples):
                 for slot in (0, 1):
