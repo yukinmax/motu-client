@@ -129,6 +129,7 @@ class FeedbackTarget:
     hwcid: int
     mode: dict | None = None
     color: dict | None = None
+    value: float | None = None
     text: dict | None = None
     channels: tuple[int, ...] | None = None
     pre_fader: bool = True
@@ -156,6 +157,7 @@ class FeedbackMap:
                     hwcid=int(cfg["hwcid"]),
                     mode=cfg.get("mode"),
                     color=cfg.get("color"),
+                    value=cfg.get("value"),
                     text=cfg.get("text"),
                     channels=tuple(channels) if channels is not None else None,
                     pre_fader=bool(cfg.get("pre_fader", True)),
@@ -431,6 +433,8 @@ class PanelController:
                                 target.hwcid,
                                 raw_value,
                             ))
+                    elif target.value is not None:
+                        active = value == target.value
                     else:
                         active = value
                     msg.update(self._apply_style(
