@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import random
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -299,16 +300,19 @@ class Store:
         self,
         diff_check: bool = True,
         handle_changes: bool = True,
+        idle_interval: float = 0.0,
     ) -> None:
         logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
         while not self._stopped:
             try:
-                await self.refresh(
+                started = time.perf_counter()
+                diff = await self.refresh(
                     diff_check=diff_check,
                     handle_changes=handle_changes,
                 )
-                # Yield so other tasks run if Motu answers immediately.
-                await asyncio.sleep(0)
+                interval = 0.0 if diff else idle_interval
+                wait = max(0, interval - (time.perf_counter() - started))
+                await asyncio.sleep(wait)
             except asyncio.CancelledError:
                 break
         logger.info(
