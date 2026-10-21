@@ -2,12 +2,9 @@ import asyncio
 import inspect
 import json
 import math
-import re
 import logging
-import motu
 import socket
 import time
-import os.path
 from binding import SOURCE_RAW_PANEL
 
 
@@ -552,6 +549,7 @@ class RawPanel():
         port=9923,
         mode='ASCII',
         delay=0.01,
+        idle_sleep = 0.1,
         sleep_timeout_minutes=0,
         sleep_mode=0,
         sleep_screen_saver=0,
@@ -570,6 +568,7 @@ class RawPanel():
         self.writer = None
         self.sys_stat = None
         self.delay = delay
+        self.idle_sleep = idle_sleep
         self.sleep_timeout_ms = sleep_timeout_minutes * 60000
         self.sleep_mode = sleep_mode
         self.sleep_screen_saver = sleep_screen_saver
@@ -930,6 +929,9 @@ class RawPanel():
         logger.info("Processing buffered hardware changes...")
         while not self._stopped:
             try:
+                if not self.hw_change_buffer:
+                    await asyncio.sleep(self.idle_sleep)
+                    continue
                 for hwid, v in self.hw_change_buffer.items():
                     t = time.perf_counter()
                     value = v['value']
