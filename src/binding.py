@@ -191,6 +191,12 @@ class MotuController:
         self._map = control_map
         self._range_mapping = range_mapping
         self._ds = None
+        self._role_handlers = {
+            "send": self._handle_send,
+            "mute": self._handle_mute,
+            "solo": self._handle_solo,
+            "override": self._handle_override,
+        }
 
     def set_datastore(self, datastore) -> None:
         self._ds = datastore
@@ -215,17 +221,11 @@ class MotuController:
             return
         logger.debug("hwcid %s value=%r role=%s", hwcid, value, cfg.role)
 
-        # TODO: Consider replacing with dispatch table
-        if cfg.role == "send":
-            await self._handle_send(cfg, value)
-        elif cfg.role == "mute":
-            await self._handle_mute(cfg, value)
-        elif cfg.role == "solo":
-            await self._handle_solo(cfg, value)
-        elif cfg.role == "override":
-            await self._handle_override(cfg, value)
-        else:
+        handler = self._role_handlers.get(cfg.role)
+        if handler is None:
             logger.debug("Unhandled role %s for hwcid %s", cfg.role, hwcid)
+            return
+        await handler(cfg, value)
 
     def _level_from_panel_value(
         self,
@@ -302,7 +302,12 @@ class PanelController:
         self._panel = None
         self._ds = None
         self._ms = None
-        self._meter_multipliers: dict[str, float] = {}
+        self._meter_multipliers: dict[int, float] = {}
+        self._kind_handlers = {
+            "button": self._handle_button,
+            "fader": self._handle_fader,
+            "display": self._handle_display,
+        }
 
     def set_panel(self, panel) -> None:
         self._panel = panel
@@ -394,10 +399,46 @@ class PanelController:
             msg.update(self._panel._set_color(hwcid, **resolved))
         return msg
 
+    def _handle_button(
+        self, target: FeedbackTarget, *, value, raw_value, db_value
+    ) -> dict:
+        if target.value is not None:
+            active = value == target.value
+        else:
+            active = value
+        return self._apply_style(
+            target.hwcid,
+            active,
+            mode=target.mode,
+            color=target.color,
+        )
+
+    def _handle_fader(
+        self, target: FeedbackTarget, *, value, raw_value, db_value
+    ) -> dict:
+        msg = self._apply_style(
+            target.hwcid,
+            True,
+            mode=target.mode,
+            color=target.color,
+        )
+        if raw_value is not None:
+            msg.update(self._panel._move_fader(target.hwcid, raw_value))
+        return msg
+
+    def _handle_display(
+        self, target: FeedbackTarget, *, value, raw_value, db_value
+    ) -> dict:
+        txt = target.text or {}
+        return self._panel._set_text(
+            target.hwcid,
+            text1=db_value,
+            **txt,
+        )
+
     async def _process_data_feedback(self, d):
         # TODO: Consider waking the panel
         # TODO: Batch the events into 1 message
-        # TODO: Dispatch table on target.kind (button/fader/display)
         # TODO: Only change fader style and display txt during feedback init
         for path, value in d.items():
             mapping = self._map.resolve(path)
@@ -417,32 +458,20 @@ class PanelController:
                         reverse=True,
                     )
             for target in mapping:
-                msg: dict = {}
-                if target.kind in ("button", "fader"):
-                    if target.kind == "fader":
-                        active = True
-                        if raw_value is not None:
-                            msg.update(self._panel._move_fader(
-                                target.hwcid,
-                                raw_value,
-                            ))
-                    elif target.value is not None:
-                        active = value == target.value
-                    else:
-                        active = value
-                    msg.update(self._apply_style(
-                        target.hwcid,
-                        active,
-                        mode=target.mode,
-                        color=target.color,
-                    ))
-                elif target.kind == "display":
-                    txt = target.text or {}
-                    msg.update(self._panel._set_text(
-                        target.hwcid,
-                        text1=db_value,
-                        **txt,
-                    ))
+                handler = self._kind_handlers.get(target.kind)
+                if handler is None:
+                    logger.debug(
+                        "Unhandled target kind %s for path %s",
+                        target.kind,
+                        path,
+                    )
+                    continue
+                msg = handler(
+                    target,
+                    value=value,
+                    raw_value=raw_value,
+                    db_value=db_value,
+                )
                 if msg:
                     await self._panel.send(msg)
 
