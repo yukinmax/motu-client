@@ -456,7 +456,7 @@ class PanelController:
             logger.warning(
                 "fader_path and mute_path required when pre_fader is False"
             )
-            return 1.0
+            return None
         return float(fader) * float(not muted)
 
     @staticmethod
@@ -513,7 +513,10 @@ class PanelController:
                 multiplier = self._meter_multipliers[target.hwcid]
             except KeyError:
                 multiplier = self._calculate_meter_multiplier(target)
-                self._meter_multipliers[target.hwcid] = multiplier
+                if multiplier is None:
+                    multiplier = 1.0
+                else:
+                    self._meter_multipliers[target.hwcid] = multiplier
             slots = []
             for samples in (level_samples, peak_samples):
                 for slot in (0, 1):
