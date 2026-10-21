@@ -126,7 +126,7 @@ class FeedbackTarget:
 
     # TODO: Infer kind from the panel topology
     kind: str
-    hwcid: str
+    hwcid: int
     mode: dict | None = None
     color: dict | None = None
     text: dict | None = None
@@ -153,7 +153,7 @@ class FeedbackMap:
                 channels = cfg.get("channels")
                 built.append(FeedbackTarget(
                     kind=kind_from_name(name),
-                    hwcid=str(cfg["hwcid"]),
+                    hwcid=int(cfg["hwcid"]),
                     mode=cfg.get("mode"),
                     color=cfg.get("color"),
                     text=cfg.get("text"),
