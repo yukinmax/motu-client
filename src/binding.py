@@ -509,8 +509,44 @@ class PanelController:
         db = motu.level_to_db(linear)
         return motu.db_from_raw(db, self._meters_range_mapping, reverse=True)
 
+    @staticmethod
+    def _split_meter_payload(data) -> tuple:
+        """Return (level_samples, peak_samples) from a meters diff."""
+        level_samples = None
+        peak_samples = None
+        for key, samples in data.items():
+            if not key.startswith("mix/level"):
+                continue
+            if key.rsplit("/", 1)[-1] == "peaks":
+                peak_samples = samples
+            else:
+                level_samples = samples
+        return level_samples, peak_samples
+
+    def _get_meter_multiplier(self, target: FeedbackTarget) -> float:
+        try:
+            return self._meter_multipliers[target.hwcid]
+        except KeyError:
+            multiplier = self._calculate_meter_multiplier(target)
+            if multiplier is None:
+                return 1.0
+            self._meter_multipliers[target.hwcid] = multiplier
+            return multiplier
+
+    def _bundle_meter_samples(
+        self, level_samples, peak_samples, channels, multiplier
+    ):
+        bundle = []
+        for samples in (level_samples, peak_samples):
+            for slot in (0, 1):
+                sample = self._get_sample_by_slot(samples, channels, slot)
+                bundle.append(
+                    None if sample is None
+                    else self._meter_level_to_raw(sample, multiplier)
+                )
+        return bundle
+
     async def _process_meters_feedback(self, d):
-        # TODO: Refactor
         # TODO: Batch multiple meters into 1 message
         # TODO: Only send audio_meter during feedback init
         # Currently sends data for all meters even if only 1 meter data changed
@@ -521,46 +557,22 @@ class PanelController:
             logger.warning("path mix/level is not mapped")
             return
 
-        level_samples = None
-        peak_samples = None
-        for key, samples in d.items():
-            if not key.startswith("mix/level"):
-                logger.debug("Skipping feedback: %s: %s", key, samples)
-                continue
-            suffix = key.rsplit("/", 1)[-1]
-            if suffix == "peaks":
-                peak_samples = samples
-            else:
-                level_samples = samples
-
+        level_samples, peak_samples = self._split_meter_payload(d)
         for target in displays:
             audio_meter = target.audio_meter
             if audio_meter is None:
                 continue
-            channels = target.channels or ()
-            try:
-                multiplier = self._meter_multipliers[target.hwcid]
-            except KeyError:
-                multiplier = self._calculate_meter_multiplier(target)
-                if multiplier is None:
-                    multiplier = 1.0
-                else:
-                    self._meter_multipliers[target.hwcid] = multiplier
-            slots = []
-            for samples in (level_samples, peak_samples):
-                for slot in (0, 1):
-                    sample = self._get_sample_by_slot(samples, channels, slot)
-                    if sample is None:
-                        slots.append(None)
-                    else:
-                        slots.append(
-                            self._meter_level_to_raw(sample, multiplier)
-                        )
+            bundle = self._bundle_meter_samples(
+                level_samples,
+                peak_samples,
+                target.channels or (),
+                self._get_meter_multiplier(target),
+            )
             await self._panel.send(self._panel._set_audio_meter(
                 target.hwcid,
-                data1=slots[0],
-                data2=slots[1],
-                peak1=slots[2],
-                peak2=slots[3],
+                data1=bundle[0],
+                data2=bundle[1],
+                peak1=bundle[2],
+                peak2=bundle[3],
                 **audio_meter,
             ))
