@@ -241,6 +241,10 @@ class Store:
         self._change_controller = None
         self._stopped = False
 
+    @property
+    def is_idle(self) -> bool:
+        return False
+
     def _url(self) -> str:
         return f"http://{self.hostname}/{self.base_path}"
 
@@ -310,7 +314,7 @@ class Store:
                     diff_check=diff_check,
                     handle_changes=handle_changes,
                 )
-                interval = 0.0 if diff else idle_interval
+                interval = 0.0 if (diff or not self.is_idle) else idle_interval
                 wait = max(0, interval - (time.perf_counter() - started))
                 await asyncio.sleep(wait)
             except asyncio.CancelledError:
@@ -385,6 +389,13 @@ class Meters(Store):
         self.base_path = "meters"
         self.refresh_params = {"meters": "mix/level"}
         self.client_id = generate_client_id()
+
+    @property
+    def is_idle(self) -> bool:
+        peaks = self.data.get("mix/level/peaks")
+        if not peaks:
+            return False  # not populated yet
+        return not any(peaks)
 
     def update_peaks(self) -> dict:
         filtered_data = {
