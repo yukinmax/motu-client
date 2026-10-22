@@ -376,6 +376,8 @@ class PanelController:
         logger.debug("Init datastore feedback %s", dd)
         await self._process_data_feedback(dd)
         logger.debug("Init meters feedback %s", md)
+        # Force the controller to send data to all audio meters
+        self._last_peaks = None
         await self._process_meters_feedback(md)
 
     @staticmethod
