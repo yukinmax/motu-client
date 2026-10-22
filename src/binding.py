@@ -303,6 +303,7 @@ class PanelController:
         self._ds = None
         self._ms = None
         self._meter_multipliers: dict[int, float] = {}
+        self._silent_meters: set[int] = set()
         self._last_peaks = None
         self._kind_handlers = {
             "button": self._handle_button,
@@ -605,11 +606,18 @@ class PanelController:
                 for ch in channels
             ):
                 continue
+            multiplier = self._get_meter_multiplier(target)
+            if multiplier == 0.0 and prev_peaks is not None:
+                if target.hwcid in self._silent_meters:
+                    continue
+                self._silent_meters.add(target.hwcid)
+            else:
+                self._silent_meters.discard(target.hwcid)
             bundle = self._bundle_meter_samples(
                 level_samples,
                 peak_samples,
                 channels,
-                self._get_meter_multiplier(target),
+                multiplier,
             )
             await self._panel.send(self._panel._set_audio_meter(
                 target.hwcid,
