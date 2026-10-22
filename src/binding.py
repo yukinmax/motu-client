@@ -363,13 +363,14 @@ class PanelController:
                 v = self._ds.get(path)
             except KeyError:
                 for i in [str(s) for s in range(15)] + ["peaks"]:
+                    m_path = f"{path}/{i}"
                     try:
-                        v = self._ms.get(f"{path}/{i}")
+                        v = self._ms.get(m_path)
                     except KeyError:
                         logger.warning("Path %s is not available", path)
                         continue
                     else:
-                        md[path] = v
+                        md[m_path] = v
             else:
                 dd[path] = v
         logger.debug("Init datastore feedback %s", dd)
