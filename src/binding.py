@@ -580,7 +580,6 @@ class PanelController:
         # TODO: Batch multiple meters into 1 message
         # TODO: Only send audio_meter during feedback init
         self._panel.last_activity = time.perf_counter()
-        await self._panel.wakeup()
         displays = self._meter_targets()
         if not displays:
             logger.warning("path mix/level is not mapped")
@@ -593,6 +592,7 @@ class PanelController:
         ) = self._split_meter_payload(d)
         prev_levels = self._previous_meter_levels(current_index)
         prev_peaks = self._last_peaks
+        await self._panel.wakeup()
         for target in displays:
             audio_meter = target.audio_meter
             if audio_meter is None:
