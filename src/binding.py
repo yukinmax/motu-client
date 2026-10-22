@@ -303,6 +303,7 @@ class PanelController:
         self._ds = None
         self._ms = None
         self._meter_multipliers: dict[int, float] = {}
+        self._last_peaks = None
         self._kind_handlers = {
             "button": self._handle_button,
             "fader": self._handle_fader,
@@ -511,17 +512,20 @@ class PanelController:
 
     @staticmethod
     def _split_meter_payload(data) -> tuple:
-        """Return (level_samples, peak_samples) from a meters diff."""
+        """Return (index, level_samples, peak_samples) from a meters diff."""
+        index = None
         level_samples = None
         peak_samples = None
         for key, samples in data.items():
             if not key.startswith("mix/level"):
                 continue
-            if key.rsplit("/", 1)[-1] == "peaks":
+            suffix = key.rsplit("/", 1)[-1]
+            if suffix == "peaks":
                 peak_samples = samples
             else:
                 level_samples = samples
-        return level_samples, peak_samples
+                index = int(suffix)
+        return index, level_samples, peak_samples
 
     def _get_meter_multiplier(self, target: FeedbackTarget) -> float:
         try:
@@ -532,6 +536,29 @@ class PanelController:
                 return 1.0
             self._meter_multipliers[target.hwcid] = multiplier
             return multiplier
+
+    def _previous_meter_levels(self, current_meter_index):
+        """Previous meter samples, or None when everything should be sent."""
+        try:
+            return self._ms.get(f"mix/level/{(current_meter_index - 1) % 15}")
+        except KeyError:
+            return None
+
+    def _channel_changed(
+        self, ch, levels, prev_levels, peaks, prev_peaks
+    ) -> bool:
+        if (
+            prev_levels is None
+            or self._get_meter_sample(levels, ch)
+            != self._get_meter_sample(prev_levels, ch)
+        ):
+            return True
+        if peaks is None or prev_peaks is None:
+            return peaks is not None
+        return (
+            self._get_meter_sample(peaks, ch)
+            != self._get_meter_sample(prev_peaks, ch)
+        )
 
     def _bundle_meter_samples(
         self, level_samples, peak_samples, channels, multiplier
@@ -549,7 +576,6 @@ class PanelController:
     async def _process_meters_feedback(self, d):
         # TODO: Batch multiple meters into 1 message
         # TODO: Only send audio_meter during feedback init
-        # Currently sends data for all meters even if only 1 meter data changed
         self._panel.last_activity = time.perf_counter()
         await self._panel.wakeup()
         displays = self._meter_targets()
@@ -557,15 +583,29 @@ class PanelController:
             logger.warning("path mix/level is not mapped")
             return
 
-        level_samples, peak_samples = self._split_meter_payload(d)
+        (
+            current_index,
+            level_samples,
+            peak_samples,
+        ) = self._split_meter_payload(d)
+        prev_levels = self._previous_meter_levels(current_index)
+        prev_peaks = self._last_peaks
         for target in displays:
             audio_meter = target.audio_meter
             if audio_meter is None:
                 continue
+            channels = target.channels or ()
+            if prev_levels is not None and not any(
+                self._channel_changed(
+                    ch, level_samples, prev_levels, peak_samples, prev_peaks
+                )
+                for ch in channels
+            ):
+                continue
             bundle = self._bundle_meter_samples(
                 level_samples,
                 peak_samples,
-                target.channels or (),
+                channels,
                 self._get_meter_multiplier(target),
             )
             await self._panel.send(self._panel._set_audio_meter(
@@ -576,3 +616,5 @@ class PanelController:
                 peak2=bundle[3],
                 **audio_meter,
             ))
+        if peak_samples is not None:
+            self._last_peaks = peak_samples
