@@ -226,8 +226,8 @@ class MotuController:
         await self.process_hwc(data["hwcid"], data["value"])
 
     async def process_hwc(self, hwcid: str | int, value: str) -> None:
-        # TODO: Prepare to handle 'Up' values as well.
         """Apply one normalized HWC value ('Down' / 'Up' / fader level)."""
+        # TODO: Prepare to handle 'Up' values as well.
         cfg = self._map.resolve(hwcid)
         if cfg is None:
             logger.debug("hwcid %s is not mapped", hwcid)

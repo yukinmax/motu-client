@@ -37,12 +37,12 @@ class RawPanel():
         self.host = str(host)
         self.port = int(port)
         self.connected = False
-        self.connection_in_progress = False
-        self.disconnect_in_progress = False
+        self._connection_in_progress = False
+        self._disconnect_in_progress = False
         self._stopped = False
-        self.reader = None
-        self.writer = None
-        self.sys_stat = None
+        self._reader = None
+        self._writer = None
+        self._sys_stat = None
         self.delay = delay
         self.idle_sleep = idle_sleep
         self.sleep_timeout_ms = sleep_timeout_minutes * 60000
@@ -59,34 +59,34 @@ class RawPanel():
             "support": None,
             "isSleeping": None,
             "panel_sleep_timeout": None,
-            "EnvironmenalHealth": None,
+            "EnvironmentalHealth": None,
             "DimmedGain": None,
         }
-        self.panel_map = {}
-        self.panelTopology = {"svgbase": None, "HWC": None}
+        self._panel_map = {}
+        self._panel_topology = {"svgbase": None, "HWC": None}
         self.panel_brightness_leds = panel_brightness_leds
         self.panel_brightness_oleds = panel_brightness_oleds
         self.panel_dimmed_gain = panel_dimmed_gain
-        self.commands = {
+        self._commands = {
             "SysStat": self._update_sys_stat,
             "_model": self._update_model,
             "_serial": self._update_serial,
             "_version": self._update_version,
             "_name": self._update_name,
             "_platform": self._update_platform,
-            "_bluePillReady": self._update_bluePillReady,
-            "_panelType": self._update_panelType,
+            "_bluePillReady": self._update_blue_pill_ready,
+            "_panelType": self._update_panel_type,
             "_support": self._update_support,
-            "_isSleeping": self._update_isSleeping,
+            "_isSleeping": self._update_is_sleeping,
             "_sleepTimer": self._update_panel_sleep_timeout,
-            "_panelTopology_svgbase": self._update_panelTopology_svgbase,
-            "_panelTopology_HWC": self._update_panelTopology_HWC,
-            "EnvironmentalHealth": self._update_EnvironmentalHealth,
-            "DimmedGain": self._update_DimmedGain,
+            "_panelTopology_svgbase": self._update_panel_topology_svgbase,
+            "_panelTopology_HWC": self._update_panel_topology_hwc,
+            "EnvironmentalHealth": self._update_environmental_health,
+            "DimmedGain": self._update_dimmed_gain,
             "map": self._update_map,
             "HWC": self._hardware_change_schedule
         }
-        self.hw_change_buffer = {}
+        self._hw_change_buffer = {}
         self.last_activity = 0.0
         self._last_wakeup = 0.0
         self._wakeup_min_interval = 10.0  # seconds
@@ -94,7 +94,7 @@ class RawPanel():
         self._feedback_controller = None
 
     def _update_sys_stat(self, value):
-        self.sys_stat = value
+        self._sys_stat = value
         logger.debug("Updated System Stats")
 
     def _update_model(self, value):
@@ -112,16 +112,16 @@ class RawPanel():
     def _update_platform(self, value):
         self.info['platform'] = value
 
-    def _update_bluePillReady(self, value):
+    def _update_blue_pill_ready(self, value):
         self.info['bluePillReady'] = value
 
-    def _update_panelType(self, value):
+    def _update_panel_type(self, value):
         self.info['panelType'] = value
 
     def _update_support(self, value):
         self.info['support'] = value
 
-    async def _update_isSleeping(self, value):
+    async def _update_is_sleeping(self, value):
         prev_state = self.info['isSleeping']
         new_state = bool(int(value))
         if new_state == prev_state:
@@ -150,26 +150,26 @@ class RawPanel():
         logger.info("Internal Panel Sleep Timer: %s", sleep_timer_str)
         self.info['panel_sleep_timeout'] = new_state
 
-    def _update_EnvironmentalHealth(self, value):
+    def _update_environmental_health(self, value):
         self.info['EnvironmentalHealth'] = value
 
-    def _update_DimmedGain(self, value):
+    def _update_dimmed_gain(self, value):
         self.info["DimmedGain"] = value
 
     def _update_map(self, value):
         k, v = value.split(":")
-        self.panel_map[k] = v
+        self._panel_map[k] = v
 
-    def _update_panelTopology_svgbase(self, value):
-        self.panelTopology["svgbase"] = value
+    def _update_panel_topology_svgbase(self, value):
+        self._panel_topology["svgbase"] = value
 
-    def _update_panelTopology_HWC(self, value):
-        self.panelTopology["HWC"] = json.loads(value)
+    def _update_panel_topology_hwc(self, value):
+        self._panel_topology["HWC"] = json.loads(value)
 
     def _hardware_change_schedule(self, hwcid, value):
         t = time.perf_counter()
         self.last_activity = t
-        change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
+        change = self._hw_change_buffer.setdefault(hwcid, {'time': t,
                                                           'value': None})
         change['value'] = value
 
@@ -226,20 +226,20 @@ class RawPanel():
         if self._stopped:
             logger.info("Shutdown is in progress, connect aborted")
             return
-        if self.disconnect_in_progress:
+        if self._disconnect_in_progress:
             logger.info("Disconnect is in progress, connect aborted")
             return
-        if self.connection_in_progress:
+        if self._connection_in_progress:
             logger.info("Another connection is in progress, connect aborted")
             return
-        self.connection_in_progress = True
+        self._connection_in_progress = True
         logger.info("Connecting to %s:%s...", self.host, self.port)
         attempt = 0
         try:
             while not self.connected and not self._stopped:
                 attempt += 1
                 try:
-                    self.reader, self.writer = await asyncio.wait_for(
+                    self._reader, self._writer = await asyncio.wait_for(
                         asyncio.open_connection(
                             self.host,
                             self.port,
@@ -263,7 +263,7 @@ class RawPanel():
                         break
                     await asyncio.sleep(retry_interval_sec)
                 else:
-                    self._configure_socket(self.writer)
+                    self._configure_socket(self._writer)
                     self.connected = True
                     logger.info(
                         "Connected to %s:%s after %s attempts.",
@@ -272,7 +272,7 @@ class RawPanel():
                         attempt,
                     )
         finally:
-            self.connection_in_progress = False
+            self._connection_in_progress = False
         if self.connected and not self._stopped:
             await self.initialize()
 
@@ -298,21 +298,21 @@ class RawPanel():
         logger.info("Raw Panel %s is initialized", self.host)
 
     async def disconnect(self, purge=False):
-        if self.disconnect_in_progress:
+        if self._disconnect_in_progress:
             logger.info(
                 "Another disconnect is in progress, disconnect aborted"
             )
             return
-        if self.connection_in_progress:
+        if self._connection_in_progress:
             logger.info("Connect is in progress, disconnect aborted")
             return
 
-        self.disconnect_in_progress = True
+        self._disconnect_in_progress = True
         logger.info("Closing connection to %s:%s...", self.host, self.port)
 
-        writer = self.writer
-        self.reader = None
-        self.writer = None
+        writer = self._writer
+        self._reader = None
+        self._writer = None
         self.connected = False
 
         try:
@@ -332,11 +332,11 @@ class RawPanel():
                         transport.abort()
             logger.info("Connection to %s:%s is closed", self.host, self.port)
             if purge:
-                self.purge_panel_info()
+                self._purge_panel_info()
         finally:
-            self.disconnect_in_progress = False
+            self._disconnect_in_progress = False
 
-    def purge_panel_info(self):
+    def _purge_panel_info(self):
         for key in self.info:
             self.info[key] = None
         logger.info("Panel info was purged")
@@ -348,12 +348,12 @@ class RawPanel():
                 "Shutdown is in progress, not handling lost connection"
             )
             return
-        if self.disconnect_in_progress:
+        if self._disconnect_in_progress:
             logger.info(
                 "Disconnect is in progress, not handling lost connection"
             )
             return
-        if self.connection_in_progress:
+        if self._connection_in_progress:
             logger.info(
                 "Connect is in progress, not handling lost connection"
             )
@@ -391,7 +391,7 @@ class RawPanel():
         else:
             params = hwcid, value
         try:
-            cmd = self.commands[command]
+            cmd = self._commands[command]
         except KeyError:
             logger.warning("Unhandled panel message: %s", request)
             return
@@ -405,14 +405,14 @@ class RawPanel():
         logger.info("Processing buffered hardware changes...")
         while not self._stopped:
             try:
-                if not self.hw_change_buffer:
+                if not self._hw_change_buffer:
                     await asyncio.sleep(self.idle_sleep)
                     continue
-                for hwid, v in self.hw_change_buffer.items():
+                for hwid, v in self._hw_change_buffer.items():
                     t = time.perf_counter()
                     value = v['value']
                     if t - v['time'] >= self.delay:
-                        del self.hw_change_buffer[hwid]
+                        del self._hw_change_buffer[hwid]
                         await self._hardware_change_process(hwid, value)
                     break
                 await asyncio.sleep(self.delay)
@@ -462,22 +462,22 @@ class RawPanel():
             await self.connect(retries=None)  # Infinite reconnect
         while (
             not self._stopped
-            and (self.connection_in_progress or self.disconnect_in_progress)
+            and (self._connection_in_progress or self._disconnect_in_progress)
         ):
             await asyncio.sleep(0.1)
-        if self._stopped or not self.connected or self.writer is None:
+        if self._stopped or not self.connected or self._writer is None:
             return
 
         payload = json.dumps(message, separators=(',', ':'))
         logger.debug(payload)
         try:
-            self.writer.write(f"{payload}\n".encode('ascii'))
-            await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-            transport = self.writer.transport
+            self._writer.write(f"{payload}\n".encode('ascii'))
+            await asyncio.wait_for(self._writer.drain(), timeout=timeout)
+            transport = self._writer.transport
             logger.debug(
                 "write_buf=%s closing=%s",
                 transport.get_write_buffer_size(),
-                self.writer.is_closing(),
+                self._writer.is_closing(),
             )
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
@@ -495,13 +495,13 @@ class RawPanel():
             await self.connect(retries=None)  # Infinite reconnect
         while (
             not self._stopped
-            and (self.connection_in_progress or self.disconnect_in_progress)
+            and (self._connection_in_progress or self._disconnect_in_progress)
         ):
             await asyncio.sleep(0.1)
-        if self._stopped or not self.connected or self.reader is None:
+        if self._stopped or not self.connected or self._reader is None:
             return None
         try:
-            raw_record = await self.reader.readline()
+            raw_record = await self._reader.readline()
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
                 "Panel read failed/timed out (%s)",
