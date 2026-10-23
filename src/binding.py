@@ -599,13 +599,6 @@ class PanelController:
             if audio_meter is None:
                 continue
             channels = target.channels or ()
-            if prev_levels is not None and not any(
-                self._channel_changed(
-                    ch, level_samples, prev_levels, peak_samples, prev_peaks
-                )
-                for ch in channels
-            ):
-                continue
             multiplier = self._get_meter_multiplier(target)
             if multiplier == 0.0 and prev_peaks is not None:
                 if target.hwcid in self._silent_meters:
@@ -613,6 +606,17 @@ class PanelController:
                 self._silent_meters.add(target.hwcid)
             else:
                 self._silent_meters.discard(target.hwcid)
+                if prev_levels is not None and not any(
+                    self._channel_changed(
+                        ch,
+                        level_samples,
+                        prev_levels,
+                        peak_samples,
+                        prev_peaks,
+                    )
+                    for ch in channels
+                ):
+                    continue
             bundle = self._bundle_meter_samples(
                 level_samples,
                 peak_samples,
