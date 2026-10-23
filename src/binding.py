@@ -18,7 +18,10 @@ import math
 import time
 import re
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Tuple
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Tuple
+
+if TYPE_CHECKING:
+    import raw_panel
 
 import motu
 
@@ -83,7 +86,7 @@ class ControlMap:
         self._bindings = dict(bindings)
 
     @classmethod
-    def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> "ControlMap":
+    def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> ControlMap:
         out: dict[str, BindingConfig] = {}
         for hwcid, entry in raw.items():
             path = entry["path"]
@@ -114,7 +117,7 @@ class ControlMap:
     def items(self) -> Iterable[Tuple[str, BindingConfig]]:
         return self._bindings.items()
 
-    def keys(self):
+    def keys(self) -> Iterable[str]:
         return self._bindings.keys()
 
 
@@ -158,7 +161,7 @@ class FeedbackMap:
         self._bindings = dict(bindings)
 
     @classmethod
-    def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> "FeedbackMap":
+    def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> FeedbackMap:
         out: dict[str, tuple[FeedbackTarget, ...]] = {}
         for path, targets in raw.items():
             built: list[FeedbackTarget] = []
@@ -189,10 +192,10 @@ class FeedbackMap:
     def __len__(self) -> int:
         return len(self._bindings)
 
-    def items(self):
+    def items(self) -> Iterable[Tuple[str, tuple[FeedbackTarget, ...]]]:
         return self._bindings.items()
 
-    def keys(self):
+    def keys(self) -> Iterable[str]:
         return self._bindings.keys()
 
 
@@ -210,7 +213,7 @@ class MotuController:
             "override": self._handle_override,
         }
 
-    def set_datastore(self, datastore) -> None:
+    def set_datastore(self, datastore: motu.DataStore) -> None:
         self._ds = datastore
 
     async def on_change(self, data: dict, *, source: str) -> None:
@@ -323,13 +326,13 @@ class PanelController:
             "display": self._handle_display,
         }
 
-    def set_panel(self, panel) -> None:
+    def set_panel(self, panel: raw_panel.RawPanel) -> None:
         self._panel = panel
 
-    def set_datastore(self, datastore) -> None:
+    def set_datastore(self, datastore: motu.DataStore) -> None:
         self._ds = datastore
 
-    def set_meters(self, meters) -> None:
+    def set_meters(self, meters: motu.Meters) -> None:
         self._ms = meters
 
     @property
@@ -395,13 +398,19 @@ class PanelController:
         await self._process_meters_feedback(md)
 
     @staticmethod
-    def _pick_value_by_status(value, active: bool):
+    def _pick_value_by_status(value: Any, active: bool) -> Any:
         """Pair (on, off) or a single scalar."""
         if isinstance(value, (tuple, list)) and len(value) == 2:
             return value[0] if active else value[1]
         return value
 
-    def _apply_style(self, hwcid: str, active, mode=None, color=None) -> dict:
+    def _apply_style(
+        self,
+        hwcid: int,
+        active: bool,
+        mode: dict | None = None,
+        color: dict | None = None,
+    ) -> dict:
         msg: dict = {}
         if mode:
             resolved = {
@@ -418,7 +427,12 @@ class PanelController:
         return msg
 
     def _handle_button(
-        self, target: FeedbackTarget, *, value, raw_value, db_value
+        self,
+        target: FeedbackTarget,
+        *,
+        value: Any,
+        raw_value: float | None,
+        db_value: float | None,
     ) -> dict:
         if target.value is not None:
             active = value == target.value
@@ -432,7 +446,12 @@ class PanelController:
         )
 
     def _handle_fader(
-        self, target: FeedbackTarget, *, value, raw_value, db_value
+        self,
+        target: FeedbackTarget,
+        *,
+        value: Any,
+        raw_value: float | None,
+        db_value: float | None,
     ) -> dict:
         msg = self._apply_style(
             target.hwcid,
@@ -445,7 +464,12 @@ class PanelController:
         return msg
 
     def _handle_display(
-        self, target: FeedbackTarget, *, value, raw_value, db_value
+        self,
+        target: FeedbackTarget,
+        *,
+        value: Any,
+        raw_value: float | None,
+        db_value: float | None,
     ) -> dict:
         txt = target.text or {}
         return self._panel._set_text(
@@ -454,7 +478,7 @@ class PanelController:
             **txt,
         )
 
-    async def _process_data_feedback(self, d):
+    async def _process_data_feedback(self, d: dict) -> None:
         # TODO: Consider waking the panel
         # TODO: Only change fader style and display txt during feedback init
         messages = []
@@ -496,7 +520,9 @@ class PanelController:
         if batched is not None:
             await self._panel.send(batched)
 
-    def _calculate_meter_multiplier(self, target: FeedbackTarget) -> float:
+    def _calculate_meter_multiplier(
+        self, target: FeedbackTarget
+    ) -> float | None:
         if target.pre_fader:
             return 1.0
         try:
@@ -510,13 +536,15 @@ class PanelController:
         return float(fader) * float(not muted)
 
     @staticmethod
-    def _get_meter_sample(samples, index: int):
+    def _get_meter_sample(samples: list | None, index: int) -> float | None:
         try:
             return samples[index]
         except (KeyError, IndexError, TypeError):
             return None
 
-    def _get_sample_by_slot(self, samples, channels, slot: int):
+    def _get_sample_by_slot(
+        self, samples: list | None, channels: tuple[int, ...], slot: int
+    ) -> float | None:
         """Return the sample at channels[slot], or None if missing."""
         try:
             ind = channels[slot]
@@ -524,14 +552,18 @@ class PanelController:
             return None
         return self._get_meter_sample(samples, ind)
 
-    def _meter_level_to_raw(self, value, multiplier: float = 1):
+    def _meter_level_to_raw(
+        self, value: int | float, multiplier: float = 1
+    ) -> float:
         """Meter sample (0–1000 scale) → panel raw."""
         linear = float(value) * multiplier / 1000
         db = motu.level_to_db(linear)
         return motu.db_from_raw(db, self._meters_range_mapping, reverse=True)
 
     @staticmethod
-    def _split_meter_payload(data) -> tuple:
+    def _split_meter_payload(
+        data: dict,
+    ) -> tuple[int | None, list | None, list | None]:
         """Return (index, level_samples, peak_samples) from a meters diff."""
         index = None
         level_samples = None
@@ -557,15 +589,22 @@ class PanelController:
             self._meter_multipliers[target.hwcid] = multiplier
             return multiplier
 
-    def _previous_meter_levels(self, current_meter_index):
+    def _previous_meter_levels(
+        self, current_meter_index: int | None
+    ) -> list | None:
         """Previous meter samples, or None when everything should be sent."""
         try:
             return self._ms.get(f"mix/level/{(current_meter_index - 1) % 15}")
         except KeyError:
             return None
 
-    def _channel_changed(
-        self, ch, levels, prev_levels, peaks, prev_peaks
+    def _is_channel_changed(
+        self,
+        ch: int,
+        levels: list | None,
+        prev_levels: list | None,
+        peaks: list | None,
+        prev_peaks: list | None,
     ) -> bool:
         if (
             prev_levels is None
@@ -581,8 +620,12 @@ class PanelController:
         )
 
     def _bundle_meter_samples(
-        self, level_samples, peak_samples, channels, multiplier
-    ):
+        self,
+        level_samples: list | None,
+        peak_samples: list | None,
+        channels: tuple[int, ...],
+        multiplier: float,
+    ) -> list:
         bundle = []
         for samples in (level_samples, peak_samples):
             for slot in (0, 1):
@@ -593,7 +636,7 @@ class PanelController:
                 )
         return bundle
 
-    async def _process_meters_feedback(self, d):
+    async def _process_meters_feedback(self, d: dict) -> None:
         # TODO: Only send audio_meter during feedback init
         self._panel.last_activity = time.perf_counter()
         displays = self._meter_targets
@@ -623,7 +666,7 @@ class PanelController:
             else:
                 self._silent_meters.discard(target.hwcid)
                 if prev_levels is not None and not any(
-                    self._channel_changed(
+                    self._is_channel_changed(
                         ch,
                         level_samples,
                         prev_levels,
