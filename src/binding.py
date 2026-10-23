@@ -53,7 +53,6 @@ def role_from_path(path: str) -> str:
     if not m:
         return "unknown"
     name = m.group(1)
-    # TODO: Remove the checks when dispatcher table is inplace
     if name in ("send", "fader"):
         return "send"
     if name in ("mute", "solo", "override"):
