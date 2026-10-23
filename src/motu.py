@@ -47,8 +47,10 @@ def db_to_level(db_value: int | float) -> float:
 
 
 def dict_diff(d_old: dict, d_new: dict) -> dict:
-    # TODO: Replace with the dictionary comprehension
-    return dict(set(d_new.items()) - set(d_old.items()))
+    return {
+        k: v for k, v in d_new.items()
+        if k not in d_old or d_old[k] != v
+    }
 
 
 def dict_values_to_tuples(d: dict) -> dict:
