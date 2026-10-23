@@ -53,12 +53,12 @@ feedback_map = binding.FeedbackMap.from_raw(mappings.feedback_map)
 
 motu_controller = binding.MotuController(
     control_map,
-    range_mapping=binding.faders_range_mapping,
+    range_mapping=binding.FADERS_RANGE_MAPPING,
 )
 panel_controller = binding.PanelController(
     feedback_map,
-    faders_range_mapping=binding.faders_range_mapping,
-    meters_range_mapping=binding.meters_range_mapping,
+    faders_range_mapping=binding.FADERS_RANGE_MAPPING,
+    meters_range_mapping=binding.METERS_RANGE_MAPPING,
 )
 
 motu_controller.set_datastore(motu_ds)
@@ -76,7 +76,7 @@ motu_ms.set_change_controller(panel_controller)
 app.asgi_app = MetricsMiddleware(app.asgi_app)
 app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
-raw_db_range_mapping = binding.faders_range_mapping
+raw_db_range_mapping = binding.FADERS_RANGE_MAPPING
 
 
 @app.before_serving

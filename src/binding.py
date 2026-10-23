@@ -33,13 +33,13 @@ OVERRIDE_BASE = 1024.0
 OVERRIDE_DISABLED = -1.0
 
 # Panel raw ↔ Motu dB.
-faders_range_mapping = (
+FADERS_RANGE_MAPPING = (
     (0, -math.inf),
     ((1, 5), (-120, -60)),
     ((5, 125), (-60, -30)),
     ((125, 1000), (-30, 12)),
 )
-meters_range_mapping = (
+METERS_RANGE_MAPPING = (
     (0, -math.inf),
     ((1, 1000), (-60, 12)),
 )
@@ -333,6 +333,7 @@ class PanelController:
     def set_meters(self, meters) -> None:
         self._ms = meters
 
+    @property
     def _meter_targets(self) -> tuple[FeedbackTarget, ...]:
         return tuple(
             target for target in (self._map.resolve("mix/level") or ())
@@ -340,7 +341,7 @@ class PanelController:
         )
 
     def _update_meter_multiplier_for_path(self, path: str) -> None:
-        for target in self._meter_targets():
+        for target in self._meter_targets:
             if path not in (target.fader_path, target.mute_path):
                 continue
             self._meter_multipliers[target.hwcid] = (
@@ -596,7 +597,7 @@ class PanelController:
     async def _process_meters_feedback(self, d):
         # TODO: Only send audio_meter during feedback init
         self._panel.last_activity = time.perf_counter()
-        displays = self._meter_targets()
+        displays = self._meter_targets
         if not displays:
             logger.warning("path mix/level is not mapped")
             return
