@@ -158,10 +158,8 @@ async def mix_send_level_get():
         if fmt in ('db', 'raw'):
             result = motu.level_to_db(result)
         if fmt == 'raw':
-            result = motu.db_from_raw(
-                result,
-                binding.FADERS_RANGE_MAPPING,
-                reverse=True,
+            result = binding.db_to_raw(
+                result, binding.FADERS_RANGE_MAPPING
             )
     return json.dumps({'status': '{:.10f}'.format(result)})
 
@@ -187,7 +185,7 @@ async def mix_send_level_set():
         )
     else:
         if fmt == 'raw':
-            value = motu.db_from_raw(value, binding.FADERS_RANGE_MAPPING)
+            value = binding.raw_to_db(value, binding.FADERS_RANGE_MAPPING)
         if fmt in ('db', 'raw'):
             value = motu.level_from_db(value)
     path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)

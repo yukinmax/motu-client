@@ -45,46 +45,6 @@ def level_from_db(db_value: float) -> float:
     return 10 ** (db_value / 20)
 
 
-# TODO: Consider splitting into 2 functions
-def db_from_raw(
-    value: int | float,
-    range_mapping: tuple[tuple, ...],
-    reverse: bool = False,
-    ) -> float | int:
-    from_index = int(reverse)
-    to_index = int(not reverse)
-    type_conversion = int if reverse else float
-    try:
-        from_min_abs = range_mapping[0][from_index][0]
-        to_min_abs = range_mapping[0][to_index][0]
-    except TypeError:
-        from_min_abs = range_mapping[0][from_index]
-        to_min_abs = range_mapping[0][to_index]
-    try:
-        from_max_abs = range_mapping[-1][from_index][1]
-        to_max_abs = range_mapping[-1][to_index][1]
-    except TypeError:
-        from_max_abs = range_mapping[-1][from_index]
-        to_max_abs = range_mapping[-1][to_index]
-    value = limit_to_range(value, from_min_abs, from_max_abs)
-    for i in range_mapping:
-        try:
-            from_min = i[from_index][0]
-            from_max = i[from_index][1]
-            to_min = i[to_index][0]
-            to_max = i[to_index][1]
-        except TypeError:
-            if value == i[from_index]:
-                return type_conversion(i[to_index])
-        else:
-            if from_min <= value < from_max:
-                break
-    cr = (to_max - to_min) / (from_max - from_min)
-    out_value = ((value - from_min) * cr) + to_min
-    out_value = limit_to_range(out_value, to_min_abs, to_max_abs)
-    return type_conversion(out_value)
-
-
 def dict_diff(d_old: dict, d_new: dict) -> dict:
     # TODO: Replace with the dictionary comprehension
     return dict(set(d_new.items()) - set(d_old.items()))

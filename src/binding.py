@@ -50,6 +50,60 @@ METERS_RANGE_MAPPING = (
 _PATH_ROLE_RE = re.compile(r"(\w+)/?(\d*)$")
 
 
+
+def _segments(mapping: tuple, *, reverse: bool = False) -> tuple:
+    """Point (src, dst) or range ((lo, hi), (dst_lo, dst_hi)) → segments."""
+    out = []
+    for src, dst in mapping:
+        if not isinstance(src, tuple):
+            src, dst = (src, src), (dst, dst)
+        if reverse:
+            src, dst = dst, src
+        out.append((
+            float(src[0]), float(src[1]), float(dst[0]), float(dst[1])
+        ))
+    return tuple(out)
+
+
+_FADERS_RAW_TO_DB = _segments(FADERS_RANGE_MAPPING)
+_FADERS_DB_TO_RAW = _segments(FADERS_RANGE_MAPPING, reverse=True)
+_METERS_RAW_TO_DB = _segments(METERS_RANGE_MAPPING)
+_METERS_DB_TO_RAW = _segments(METERS_RANGE_MAPPING, reverse=True)
+
+
+def _lerp(value: float, segments: tuple) -> float:
+    first_lo, _, first_dst, _ = segments[0]
+    _, last_hi, _, last_dst = segments[-1]
+    if value <= first_lo:
+        return first_dst
+    if value >= last_hi:
+        return last_dst
+    for lo, hi, dst_lo, dst_hi in segments:
+        if hi == lo:
+            continue
+        if lo <= value < hi:
+            return dst_lo + (value - lo) / (hi - lo) * (dst_hi - dst_lo)
+    return last_dst
+
+
+def raw_to_db(value: int | float, range_mapping: tuple) -> float:
+    """Panel raw → dB. Accepts int or float."""
+    segments = (
+        _FADERS_RAW_TO_DB if range_mapping is FADERS_RANGE_MAPPING
+        else _METERS_RAW_TO_DB
+    )
+    return _lerp(float(value), segments)
+
+
+def db_to_raw(value: int | float, range_mapping: tuple) -> int:
+    """dB → panel raw. Accepts int or float."""
+    segments = (
+        _FADERS_DB_TO_RAW if range_mapping is FADERS_RANGE_MAPPING
+        else _METERS_DB_TO_RAW
+    )
+    return int(_lerp(float(value), segments))
+
+
 def role_from_path(path: str) -> str:
     """Infer control role from the last Motu path segment."""
     m = _PATH_ROLE_RE.search(path)
@@ -258,7 +312,7 @@ class MotuController:
                 return 1.0
             default = motu.level_from_db(cfg.default_level_db)
             return default if current != default else 1.0
-        db = motu.db_from_raw(raw, self._range_mapping)
+        db = raw_to_db(raw, self._range_mapping)
         return motu.level_from_db(db)
 
     async def _handle_send(self, cfg: BindingConfig, v: str) -> None:
@@ -494,10 +548,8 @@ class PanelController:
                 self._update_meter_multiplier_for_path(path)
                 if tail in ("send", "fader"):
                     db_value = motu.level_to_db(float(value))
-                    raw_value = motu.db_from_raw(
-                        db_value,
-                        self._faders_range_mapping,
-                        reverse=True,
+                    raw_value = db_to_raw(
+                        db_value, self._faders_range_mapping
                     )
             for target in mapping:
                 handler = self._kind_handlers.get(target.kind)
@@ -559,7 +611,7 @@ class PanelController:
         """Meter sample (0–1000 scale) → panel raw."""
         linear = value * multiplier / 1000
         db = motu.level_to_db(linear)
-        return motu.db_from_raw(db, self._meters_range_mapping, reverse=True)
+        return db_to_raw(db, self._meters_range_mapping)
 
     @staticmethod
     def _split_meter_payload(
