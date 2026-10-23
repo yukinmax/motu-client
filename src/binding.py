@@ -310,10 +310,10 @@ class MotuController:
             if cfg.default_level_db is None:
                 logger.debug("No default level for path %s", cfg.path)
                 return 1.0
-            default = motu.level_from_db(cfg.default_level_db)
+            default = motu.db_to_level(cfg.default_level_db)
             return default if current != default else 1.0
         db = raw_to_db(raw, self._range_mapping)
-        return motu.level_from_db(db)
+        return motu.db_to_level(db)
 
     async def _handle_send(self, cfg: BindingConfig, v: str) -> None:
         level = self._level_from_panel_value(cfg, v)
@@ -547,7 +547,7 @@ class PanelController:
             if tail in ("mute", "fader", "send"):
                 self._update_meter_multiplier_for_path(path)
                 if tail in ("send", "fader"):
-                    db_value = motu.level_to_db(float(value))
+                    db_value = motu.level_to_db(value)
                     raw_value = db_to_raw(
                         db_value, self._faders_range_mapping
                     )

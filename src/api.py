@@ -187,7 +187,7 @@ async def mix_send_level_set():
         if fmt == 'raw':
             value = binding.raw_to_db(value, binding.FADERS_RANGE_MAPPING)
         if fmt in ('db', 'raw'):
-            value = motu.level_from_db(value)
+            value = motu.db_to_level(value)
     path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)
     await motu_ds.set(path, value)
     result = motu_ds.get(path)

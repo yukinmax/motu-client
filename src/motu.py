@@ -30,13 +30,14 @@ def limit_to_range(value: float, minimum: float, maximum: float) -> float:
     return max(min(value, maximum), minimum)
 
 
-def level_to_db(value: float) -> float:
+def level_to_db(value: int | float) -> float:
+    value = float(value)
     if value == 0:
         return -math.inf
     return round(20 * math.log10(value), 2)
 
 
-def level_from_db(db_value: float) -> float:
+def db_to_level(db_value: int | float) -> float:
     db_value = float(db_value)
     if db_value > 12:
         db_value = 12
