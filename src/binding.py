@@ -443,8 +443,8 @@ class PanelController:
 
     async def _process_data_feedback(self, d):
         # TODO: Consider waking the panel
-        # TODO: Batch the events into 1 message
         # TODO: Only change fader style and display txt during feedback init
+        messages = []
         for path, value in d.items():
             mapping = self._map.resolve(path)
             if mapping is None:
@@ -478,7 +478,10 @@ class PanelController:
                     db_value=db_value,
                 )
                 if msg:
-                    await self._panel.send(msg)
+                    messages.append(msg)
+        batched = self._panel.batch_hwc(messages)
+        if batched is not None:
+            await self._panel.send(batched)
 
     def _calculate_meter_multiplier(self, target: FeedbackTarget) -> float:
         if target.pre_fader:
@@ -578,7 +581,6 @@ class PanelController:
         return bundle
 
     async def _process_meters_feedback(self, d):
-        # TODO: Batch multiple meters into 1 message
         # TODO: Only send audio_meter during feedback init
         self._panel.last_activity = time.perf_counter()
         displays = self._meter_targets()
@@ -594,6 +596,7 @@ class PanelController:
         prev_levels = self._previous_meter_levels(current_index)
         prev_peaks = self._last_peaks
         await self._panel.wakeup()
+        messages = []
         for target in displays:
             audio_meter = target.audio_meter
             if audio_meter is None:
@@ -623,7 +626,7 @@ class PanelController:
                 channels,
                 multiplier,
             )
-            await self._panel.send(self._panel._set_audio_meter(
+            messages.append(self._panel._set_audio_meter(
                 target.hwcid,
                 data1=bundle[0],
                 data2=bundle[1],
@@ -631,5 +634,8 @@ class PanelController:
                 peak2=bundle[3],
                 **audio_meter,
             ))
+        batched = self._panel.batch_hwc(messages)
+        if batched is not None:
+            await self._panel.send(batched)
         if peak_samples is not None:
             self._last_peaks = peak_samples

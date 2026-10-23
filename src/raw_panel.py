@@ -957,6 +957,28 @@ class RawPanel():
                 break
         logger.info("Requests from the panel are not handled anymore")
 
+    @staticmethod
+    def batch_hwc(messages: list[dict]) -> dict | list | None:
+        """Collapse panel messages into one write.
+
+        Messages with the same body share one HWCIDs list. Different
+        bodies are wrapped as [{"States": [...]}]. One unique body is
+        sent as-is. Insertion order is kept.
+        """
+        if not messages:
+            return None
+        grouped: dict[str, dict] = {}
+        for msg in messages:
+            body = {k: v for k, v in msg.items() if k != "HWCIDs"}
+            key = json.dumps(body, separators=(",", ":"), sort_keys=True)
+            existing = grouped.setdefault(key, msg)
+            if existing is not msg:
+                existing["HWCIDs"].extend(msg["HWCIDs"])
+        states = list(grouped.values())
+        if len(states) == 1:
+            return states[0]
+        return [{"States": states}]
+
     async def send(self, message, timeout=1):
         if self._stopped:
             return
