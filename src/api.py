@@ -76,8 +76,6 @@ motu_ms.set_change_controller(panel_controller)
 app.asgi_app = MetricsMiddleware(app.asgi_app)
 app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
-raw_db_range_mapping = binding.FADERS_RANGE_MAPPING
-
 
 @app.before_serving
 async def startup():
@@ -162,7 +160,7 @@ async def mix_send_level_get():
         if fmt == 'raw':
             result = motu.db_from_raw(
                 result,
-                raw_db_range_mapping,
+                binding.FADERS_RANGE_MAPPING,
                 reverse=True,
             )
     return json.dumps({'status': '{:.10f}'.format(result)})
@@ -184,12 +182,12 @@ async def mix_send_level_set():
     except KeyError:
         value = motu.limit_to_range(
             value,
-            motu.level_range[0],
-            motu.level_range[1],
+            motu.LEVEL_RANGE[0],
+            motu.LEVEL_RANGE[1],
         )
     else:
         if fmt == 'raw':
-            value = motu.db_from_raw(value, raw_db_range_mapping)
+            value = motu.db_from_raw(value, binding.FADERS_RANGE_MAPPING)
         if fmt in ('db', 'raw'):
             value = motu.level_from_db(value)
     path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)

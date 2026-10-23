@@ -12,7 +12,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-level_range = (0, 10 ** (12 / 20))
+LEVEL_RANGE = (0, 10 ** (12 / 20))
 
 # Motu long-poll hold is ~10s; client timeout slightly above that.
 DEFAULT_POLL_TIMEOUT_SEC = 15
