@@ -414,13 +414,13 @@ class PanelController:
         msg: dict = {}
         if mode:
             resolved = {
-                key: self._pick_value_by_status(val, bool(active))
+                key: self._pick_value_by_status(val, active)
                 for key, val in mode.items()
             }
             msg.update(self._panel._set_mode(hwcid, **resolved))
         if color:
             resolved = {
-                key: self._pick_value_by_status(val, bool(active))
+                key: self._pick_value_by_status(val, active)
                 for key, val in color.items()
             }
             msg.update(self._panel._set_color(hwcid, **resolved))
@@ -431,13 +431,13 @@ class PanelController:
         target: FeedbackTarget,
         *,
         value: Any,
-        raw_value: float | None,
+        raw_value: int | None,
         db_value: float | None,
     ) -> dict:
         if target.value is not None:
             active = value == target.value
         else:
-            active = value
+            active = bool(value)
         return self._apply_style(
             target.hwcid,
             active,
@@ -450,7 +450,7 @@ class PanelController:
         target: FeedbackTarget,
         *,
         value: Any,
-        raw_value: float | None,
+        raw_value: int | None,
         db_value: float | None,
     ) -> dict:
         msg = self._apply_style(
@@ -468,7 +468,7 @@ class PanelController:
         target: FeedbackTarget,
         *,
         value: Any,
-        raw_value: float | None,
+        raw_value: int | None,
         db_value: float | None,
     ) -> dict:
         txt = target.text or {}
@@ -536,27 +536,28 @@ class PanelController:
         return float(fader) * float(not muted)
 
     @staticmethod
-    def _get_meter_sample(samples: list | None, index: int) -> float | None:
+    def _get_meter_sample(
+        samples: list | None, index: int | None
+    ) -> float | None:
         try:
             return samples[index]
         except (KeyError, IndexError, TypeError):
             return None
 
-    def _get_sample_by_slot(
-        self, samples: list | None, channels: tuple[int, ...], slot: int
-    ) -> float | None:
-        """Return the sample at channels[slot], or None if missing."""
+    def _get_channel_by_slot(
+        self, channels: tuple[int, ...], slot: int
+    ) -> int | None:
+        """Return the channels[slot], or None if missing."""
         try:
-            ind = channels[slot]
+            return channels[slot]
         except IndexError:
             return None
-        return self._get_meter_sample(samples, ind)
 
     def _meter_level_to_raw(
-        self, value: int | float, multiplier: float = 1
-    ) -> float:
+        self, value: int, multiplier: float = 1.0
+    ) -> int:
         """Meter sample (0–1000 scale) → panel raw."""
-        linear = float(value) * multiplier / 1000
+        linear = value * multiplier / 1000
         db = motu.level_to_db(linear)
         return motu.db_from_raw(db, self._meters_range_mapping, reverse=True)
 
@@ -595,7 +596,7 @@ class PanelController:
         """Previous meter samples, or None when everything should be sent."""
         try:
             return self._ms.get(f"mix/level/{(current_meter_index - 1) % 15}")
-        except KeyError:
+        except (KeyError, TypeError):
             return None
 
     def _is_channel_changed(
@@ -629,7 +630,8 @@ class PanelController:
         bundle = []
         for samples in (level_samples, peak_samples):
             for slot in (0, 1):
-                sample = self._get_sample_by_slot(samples, channels, slot)
+                channel = self._get_channel_by_slot(channels, slot)
+                sample = self._get_meter_sample(samples, channel)
                 bundle.append(
                     None if sample is None
                     else self._meter_level_to_raw(sample, multiplier)
