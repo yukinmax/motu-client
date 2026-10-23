@@ -14,6 +14,7 @@ Sources:
 from __future__ import annotations
 
 import logging
+import math
 import time
 import re
 from dataclasses import dataclass
@@ -30,6 +31,18 @@ SOURCE_METERS = "meters"
 OVERRIDE_PATH = "mix/monitor/0/override"
 OVERRIDE_BASE = 1024.0
 OVERRIDE_DISABLED = -1.0
+
+# Panel raw ↔ Motu dB.
+faders_range_mapping = (
+    (0, -math.inf),
+    ((1, 5), (-120, -60)),
+    ((5, 125), (-60, -30)),
+    ((125, 1000), (-30, 12)),
+)
+meters_range_mapping = (
+    (0, -math.inf),
+    ((1, 1000), (-60, 12)),
+)
 
 _PATH_ROLE_RE = re.compile(r"(\w+)/?(\d*)$")
 

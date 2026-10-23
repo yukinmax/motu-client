@@ -7,6 +7,7 @@ from aioprometheus.asgi.quart import metrics
 import motu
 import raw_panel
 import binding
+import mappings
 
 
 _VALID_LOG_LEVELS = {
@@ -47,17 +48,17 @@ skaarhoj_panel = raw_panel.RawPanel(
     sleep_timeout_minutes=10,
 )
 
-control_map = binding.ControlMap.from_raw(raw_panel.tmp_mapping)
-feedback_map = binding.FeedbackMap.from_raw(raw_panel.feedback_map)
+control_map = binding.ControlMap.from_raw(mappings.control_map)
+feedback_map = binding.FeedbackMap.from_raw(mappings.feedback_map)
 
 motu_controller = binding.MotuController(
     control_map,
-    range_mapping=raw_panel.raw_db_range_mapping_faders,
+    range_mapping=binding.faders_range_mapping,
 )
 panel_controller = binding.PanelController(
     feedback_map,
-    faders_range_mapping=raw_panel.raw_db_range_mapping_faders,
-    meters_range_mapping=raw_panel.raw_db_range_mapping_meters,
+    faders_range_mapping=binding.faders_range_mapping,
+    meters_range_mapping=binding.meters_range_mapping,
 )
 
 motu_controller.set_datastore(motu_ds)
@@ -75,7 +76,7 @@ motu_ms.set_change_controller(panel_controller)
 app.asgi_app = MetricsMiddleware(app.asgi_app)
 app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
-raw_db_range_mapping = raw_panel.raw_db_range_mapping_faders
+raw_db_range_mapping = binding.faders_range_mapping
 
 
 @app.before_serving
