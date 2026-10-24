@@ -53,16 +53,6 @@ def dict_diff(d_old: dict, d_new: dict) -> dict:
     }
 
 
-def dict_values_to_tuples(d: dict) -> dict:
-    d_new = {}
-    for k, v in d.items():
-        try:
-            d_new[k] = tuple(v)
-        except TypeError:
-            d_new[k] = v
-    return d_new
-
-
 def generate_client_id() -> int:
     return random.getrandbits(32)
 
@@ -237,10 +227,9 @@ class Store:
 
         payload = response.json() or {}
         if diff_check:
-            new_data = dict_values_to_tuples(payload)
-            data_diff = dict_diff(self.data, new_data)
+            data_diff = dict_diff(self.data, payload)
         else:
-            data_diff = dict_values_to_tuples(payload)
+            data_diff = payload
 
         etag = response.etag
         if etag:
@@ -352,6 +341,7 @@ class Meters(Store):
         self.base_path = "meters"
         self.refresh_params = {"meters": "mix/level"}
         self.client_id = generate_client_id()
+        self.current_index: int | None = None
 
     @property
     def idle(self) -> bool:
@@ -375,6 +365,16 @@ class Meters(Store):
         logger.debug("Modified: %s -> %s", self.base_path, peaks)
         return peaks
 
+    def _set_current_index(self, data: dict) -> None:
+        for key in data:
+            if not key.startswith("mix/level/") or key.endswith("peaks"):
+                continue
+            try:
+                self.current_index = int(key.rsplit("/", 1)[-1])
+            except ValueError:
+                continue
+            return
+
     async def refresh(
         self,
         diff_check: bool = True,
@@ -385,6 +385,7 @@ class Meters(Store):
             handle_changes=False,
         )
         if data_diff:
+            self._set_current_index(data_diff)
             data_diff.update(self._update_peaks())
             if self._change_controller and handle_changes:
                 await self._change_controller.on_change(

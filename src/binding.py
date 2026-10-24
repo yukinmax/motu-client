@@ -616,9 +616,8 @@ class PanelController:
     @staticmethod
     def _split_meter_payload(
         data: dict,
-    ) -> tuple[int | None, list | None, list | None]:
-        """Return (index, level_samples, peak_samples) from a meters diff."""
-        index = None
+    ) -> tuple[list | None, list | None]:
+        """Return (level_samples, peak_samples) from a meters diff."""
         level_samples = None
         peak_samples = None
         for key, samples in data.items():
@@ -629,8 +628,7 @@ class PanelController:
                 peak_samples = samples
             else:
                 level_samples = samples
-                index = int(suffix)
-        return index, level_samples, peak_samples
+        return level_samples, peak_samples
 
     def _get_meter_multiplier(self, target: FeedbackTarget) -> float:
         try:
@@ -642,13 +640,15 @@ class PanelController:
             self._meter_multipliers[target.hwcid] = multiplier
             return multiplier
 
-    def _previous_meter_levels(
-        self, current_meter_index: int | None
-    ) -> list | None:
+    @property
+    def _previous_meter_levels(self) -> list | None:
         """Previous meter samples, or None when everything should be sent."""
+        index = self._ms.current_index if self._ms else None
+        if index is None:
+            return None
         try:
-            return self._ms.get(f"mix/level/{(current_meter_index - 1) % 15}")
-        except (KeyError, TypeError):
+            return self._ms.get(f"mix/level/{(index - 1) % 15}")
+        except KeyError:
             return None
 
     def _is_channel_changed(
@@ -698,12 +698,8 @@ class PanelController:
             logger.warning("path mix/level is not mapped")
             return
 
-        (
-            current_index,
-            level_samples,
-            peak_samples,
-        ) = self._split_meter_payload(d)
-        prev_levels = self._previous_meter_levels(current_index)
+        level_samples, peak_samples = self._split_meter_payload(d)
+        prev_levels = self._previous_meter_levels
         prev_peaks = self._last_peaks
         await self._panel.wakeup()
         messages = []
