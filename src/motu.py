@@ -316,18 +316,18 @@ class DataStore(Store):
                 )
         return response
 
-    async def toggle(self, path: str):
-        # TODO: Refactor the return values
+    async def toggle(self, path: str) -> float | None:
         try:
-            s = self.get(path)
+            current = self.get(path)
         except KeyError:
-            return "FAILURE"
-        j = float(not s)
-        r = await self.set(path, j)
-        if r is not None and r.status_code == 204:
-            return j
+            logger.error("Cannot toggle missing path %s", path)
+            return None
+        value = float(not current)
+        response = await self.set(path, value)
+        if response is not None and response.status_code == 204:
+            return value
         logger.error("Failed to toggle %s", path)
-        return "FAILURE"
+        return None
 
 
 class Meters(Store):

@@ -125,7 +125,10 @@ async def mute_toggle():
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
     path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
-    return json.dumps({'status': str(await motu_ds.toggle(path))})
+    value = await motu_ds.toggle(path)
+    if value is None:
+        return json.dumps({'status': 'FAILURE'})
+    return json.dumps({'status': str(value)})
 
 
 @app.route('/api/v1/motu/mute-status', methods=['GET'])
