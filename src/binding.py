@@ -83,7 +83,7 @@ def _lerp(value: float, segments: tuple) -> float:
             continue
         if lo <= value < hi:
             return dst_lo + (value - lo) / (hi - lo) * (dst_hi - dst_lo)
-    return last_dst
+    return first_dst
 
 
 def raw_to_db(value: int | float, range_mapping: tuple) -> float:
