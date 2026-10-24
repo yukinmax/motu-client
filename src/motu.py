@@ -367,9 +367,9 @@ class Meters(Store):
         if not filtered_data:
             return {}
         peaks = {
-            "mix/level/peaks": tuple(
+            "mix/level/peaks": [
                 max(values) for values in zip(*filtered_data.values())
-            )
+            ]
         }
         self.data.update(peaks)
         logger.debug("Modified: %s -> %s", self.base_path, peaks)

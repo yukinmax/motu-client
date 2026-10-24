@@ -688,6 +688,8 @@ class PanelController:
             return
 
         level_samples, peak_samples = self._split_meter_payload(d)
+        if level_samples is None:
+            return
         prev_levels = self._ms.previous_levels if self._ms else None
         prev_peaks = self._last_peaks
         await self._panel.wakeup()
