@@ -249,7 +249,7 @@ class Store:
             return data_diff
         return None
 
-    def get(self, path: str):
+    def get(self, path: str) -> Any:
         return self.data[path]
 
     async def poll(
@@ -277,7 +277,7 @@ class Store:
             self.hostname,
         )
 
-    def set_change_controller(self, controller) -> None:
+    def set_change_controller(self, controller: Any) -> None:
         """Attach controller implementing on_change(data, *, source)."""
         self._change_controller = controller
 
@@ -293,7 +293,7 @@ class DataStore(Store):
         self.base_path = "datastore"
         self.client_id = generate_client_id()
 
-    async def set(self, path: str, value) -> HttpResult | None:
+    async def set(self, path: str, value: Any) -> HttpResult | None:
         data = f"json={json.dumps({path: value})}".encode()
         response = await self.http.request(
             self._url(),

@@ -78,7 +78,7 @@ app.add_url_rule('/metrics', 'metrics', metrics, methods=['GET'])
 
 
 @app.before_serving
-async def startup():
+async def startup() -> None:
     await motu_http_client.start()
     await motu_ds.refresh(handle_changes=False)
     await motu_ms.refresh(handle_changes=False)
@@ -91,7 +91,7 @@ async def startup():
 
 
 @app.after_serving
-async def shutdown():
+async def shutdown() -> None:
     logger.info("Shutting down...")
     skaarhoj_panel.stop()
     motu_ds.stop()
@@ -102,12 +102,12 @@ async def shutdown():
 
 
 @app.route('/', methods=['GET'])
-async def home():
+async def home() -> str:
     return '<h1>MOTU API</h1>'
 
 
 @app.route('/api/v1/panel', methods=['POST'])
-async def panel_command():
+async def panel_command() -> str:
     try:
         command = request.args['command']
     except KeyError:
@@ -117,7 +117,7 @@ async def panel_command():
 
 
 @app.route('/api/v1/motu/mute-toggle', methods=['GET'])
-async def mute_toggle():
+async def mute_toggle() -> str:
     if 'bus' not in request.args:
         return "Error: No bus field provided. Please specify bus."
     if 'index' not in request.args:
@@ -132,7 +132,7 @@ async def mute_toggle():
 
 
 @app.route('/api/v1/motu/mute-status', methods=['GET'])
-async def mute_status():
+async def mute_status() -> str:
     if 'bus' not in request.args:
         return "Error: No bus field provided. Please specify bus."
     if 'index' not in request.args:
@@ -144,7 +144,7 @@ async def mute_status():
 
 
 @app.route('/api/v1/motu/aux-send-level', methods=['GET'])
-async def mix_send_level_get():
+async def mix_send_level_get() -> str:
     if 'chan' not in request.args:
         return "Error: No channel field provided. Please specify channel #."
     if 'aux' not in request.args:
@@ -168,7 +168,7 @@ async def mix_send_level_get():
 
 
 @app.route('/api/v1/motu/aux-send-level', methods=['POST', 'PATCH'])
-async def mix_send_level_set():
+async def mix_send_level_set() -> str:
     if 'chan' not in request.args:
         return "Error: No channel field provided. Please specify channel #."
     if 'aux' not in request.args:

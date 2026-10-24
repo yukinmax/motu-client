@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import json
 import logging
 import socket
 import time
+from typing import Any
+
 from binding import SOURCE_RAW_PANEL
 
 
@@ -21,18 +25,18 @@ def normalize_hwc_value(value: str) -> str:
 class RawPanel():
     def __init__(
         self,
-        host,
-        port=9923,
-        mode='ASCII',
-        delay=0.01,
-        idle_sleep = 0.1,
-        sleep_timeout_minutes=0,
-        sleep_mode=0,
-        sleep_screen_saver=0,
-        panel_brightness_leds=4,
-        panel_brightness_oleds=2,
-        panel_dimmed_gain=20,
-    ):
+        host: str,
+        port: int = 9923,
+        mode: str = 'ASCII',
+        delay: float = 0.01,
+        idle_sleep: float = 0.1,
+        sleep_timeout_minutes: int = 0,
+        sleep_mode: int = 0,
+        sleep_screen_saver: int = 0,
+        panel_brightness_leds: int = 4,
+        panel_brightness_oleds: int = 2,
+        panel_dimmed_gain: int = 20,
+    ) -> None:
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
@@ -93,35 +97,35 @@ class RawPanel():
         self._change_controller = None
         self._feedback_controller = None
 
-    def _update_sys_stat(self, value):
+    def _update_sys_stat(self, value: str) -> None:
         self._sys_stat = value
         logger.debug("Updated System Stats")
 
-    def _update_model(self, value):
+    def _update_model(self, value: str) -> None:
         self.info['model'] = value
 
-    def _update_serial(self, value):
+    def _update_serial(self, value: str) -> None:
         self.info['serial'] = value
 
-    def _update_version(self, value):
+    def _update_version(self, value: str) -> None:
         self.info['version'] = value
 
-    def _update_name(self, value):
+    def _update_name(self, value: str) -> None:
         self.info['name'] = value
 
-    def _update_platform(self, value):
+    def _update_platform(self, value: str) -> None:
         self.info['platform'] = value
 
-    def _update_blue_pill_ready(self, value):
+    def _update_blue_pill_ready(self, value: str) -> None:
         self.info['bluePillReady'] = value
 
-    def _update_panel_type(self, value):
+    def _update_panel_type(self, value: str) -> None:
         self.info['panelType'] = value
 
-    def _update_support(self, value):
+    def _update_support(self, value: str) -> None:
         self.info['support'] = value
 
-    async def _update_is_sleeping(self, value):
+    async def _update_is_sleeping(self, value: str) -> None:
         prev_state = self.info['isSleeping']
         new_state = bool(int(value))
         if new_state == prev_state:
@@ -138,7 +142,7 @@ class RawPanel():
             if self._feedback_controller is not None:
                 await self._feedback_controller.init_feedback()
 
-    def _update_panel_sleep_timeout(self, value):
+    def _update_panel_sleep_timeout(self, value: str) -> None:
         prev_state = self.info['panel_sleep_timeout']
         new_state = int(value)
         if new_state == prev_state:
@@ -150,30 +154,30 @@ class RawPanel():
         logger.info("Internal Panel Sleep Timer: %s", sleep_timer_str)
         self.info['panel_sleep_timeout'] = new_state
 
-    def _update_environmental_health(self, value):
+    def _update_environmental_health(self, value: str) -> None:
         self.info['EnvironmentalHealth'] = value
 
-    def _update_dimmed_gain(self, value):
+    def _update_dimmed_gain(self, value: str) -> None:
         self.info["DimmedGain"] = value
 
-    def _update_map(self, value):
+    def _update_map(self, value: str) -> None:
         k, v = value.split(":")
         self._panel_map[k] = v
 
-    def _update_panel_topology_svgbase(self, value):
+    def _update_panel_topology_svgbase(self, value: str) -> None:
         self._panel_topology["svgbase"] = value
 
-    def _update_panel_topology_hwc(self, value):
+    def _update_panel_topology_hwc(self, value: str) -> None:
         self._panel_topology["HWC"] = json.loads(value)
 
-    def _hardware_change_schedule(self, hwcid, value):
+    def _hardware_change_schedule(self, hwcid: str, value: str) -> None:
         t = time.perf_counter()
         self.last_activity = t
         change = self._hw_change_buffer.setdefault(hwcid, {'time': t,
                                                           'value': None})
         change['value'] = value
 
-    async def _hardware_change_process(self, hwcid, value):
+    async def _hardware_change_process(self, hwcid: str, value: str) -> None:
         await self.wakeup()
         if self._change_controller is None:
             logger.debug("No change controller; ignore hwcid %s", hwcid)
@@ -214,15 +218,20 @@ class RawPanel():
         """Signal long-running loops to exit; blocks reconnect."""
         self._stopped = True
 
-    def set_change_controller(self, controller) -> None:
+    def set_change_controller(self, controller: Any) -> None:
         """Attach controller implementing on_change(data, *, source)."""
         self._change_controller = controller
 
-    def set_feedback_controller(self, controller) -> None:
+    def set_feedback_controller(self, controller: Any) -> None:
         """Attach controller implementing init_feedback()."""
         self._feedback_controller = controller
 
-    async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
+    async def connect(
+        self,
+        retries: int | None = 20,
+        retry_interval_sec: int | float = 10,
+        timeout: int | float = 10,
+    ) -> None:
         if self._stopped:
             logger.info("Shutdown is in progress, connect aborted")
             return
@@ -276,7 +285,7 @@ class RawPanel():
         if self.connected and not self._stopped:
             await self.initialize()
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         # Responses from the panel are handled only after the panel
         # handlers are started
         # TODO: Try await self.receive() for each expected response,
@@ -297,7 +306,7 @@ class RawPanel():
         await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)
 
-    async def disconnect(self, purge=False):
+    async def disconnect(self, purge: bool = False) -> None:
         if self._disconnect_in_progress:
             logger.info(
                 "Another disconnect is in progress, disconnect aborted"
@@ -336,12 +345,12 @@ class RawPanel():
         finally:
             self._disconnect_in_progress = False
 
-    def _purge_panel_info(self):
+    def _purge_panel_info(self) -> None:
         for key in self.info:
             self.info[key] = None
         logger.info("Panel info was purged")
 
-    async def handle_lost_connection(self):
+    async def handle_lost_connection(self) -> None:
         logger.warning("Connection to %s:%s was lost", self.host, self.port)
         if self._stopped:
             logger.info(
@@ -360,7 +369,7 @@ class RawPanel():
             return
         await self.disconnect(purge=True)
 
-    async def wakeup(self, force: bool = False):
+    async def wakeup(self, force: bool = False) -> None:
         """Send wakeup message.
 
         Throttled by default so high-rate feedback does not spam the panel.
@@ -370,7 +379,7 @@ class RawPanel():
             await self.send(self._wakeup())
             self._last_wakeup = now
 
-    async def handle_request(self, request):
+    async def handle_request(self, request: str) -> None:
         try:
             key, value = request.split('=', 1)
         except ValueError:
@@ -401,7 +410,7 @@ class RawPanel():
         else:
             cmd(*params)
 
-    async def process_buffers(self):
+    async def process_buffers(self) -> None:
         logger.info("Processing buffered hardware changes...")
         while not self._stopped:
             try:
@@ -420,7 +429,7 @@ class RawPanel():
                 break
         logger.info("Buffer processing finished")
 
-    async def handle_requests(self):
+    async def handle_requests(self) -> None:
         logger.info("Handling requests from the panel...")
         while not self._stopped:
             try:
@@ -455,7 +464,9 @@ class RawPanel():
             return states[0]
         return [{"States": states}]
 
-    async def send(self, message, timeout=1):
+    async def send(
+        self, message: dict | list, timeout: int | float = 1
+    ) -> None:
         if self._stopped:
             return
         if not self.connected:
@@ -488,7 +499,7 @@ class RawPanel():
             logger.debug("%r", e)
             await self.handle_lost_connection()
 
-    async def receive(self):
+    async def receive(self) -> str | None:
         if self._stopped:
             return None
         if not self.connected:
@@ -526,32 +537,32 @@ class RawPanel():
         return record
 
     # TODO: Refactor message building logic
-    def _get_panel_info(self):
+    def _get_panel_info(self) -> list:
         return [{"Command": {"SendPanelInfo": True}}]
 
-    def _get_panel_map(self):
+    def _get_panel_map(self) -> list:
         return [{"Command": {"ReportHWCavailability": True}}]
 
-    def _get_panel_topology(self):
+    def _get_panel_topology(self) -> list:
         return [{"Command": {"SendPanelTopology": True}}]
 
-    def _wakeup(self):
+    def _wakeup(self) -> list:
         return [{"Command": {"WakeUp": True}}]
 
-    def _get_sleep_timeout(self):
+    def _get_sleep_timeout(self) -> list:
         return [{"Command": {"GetSleepTimeout": True}}]
 
-    def _set_sleep_timeout(self, timeout_ms):
+    def _set_sleep_timeout(self, timeout_ms: int) -> list:
         return [{"Command": {"SetSleepTimeout": {"Value": timeout_ms}}}]
 
-    def _set_sleep_mode(self, value: int = 0):
+    def _set_sleep_mode(self, value: int = 0) -> list:
         """
         0 = FireWorks (Default) - LEDs will animate on the panel
         1 = Buttons Off
         """
         return [{"Command": {"SetSleepMode": {"Value": value}}}]
 
-    def _set_sleep_screen_saver(self, value: int = 0):
+    def _set_sleep_screen_saver(self, value: int = 0) -> list:
         """
         0 = "Wake Up On Key Press" message (default)
         1 = "Sheep And Goats" - Classic UniSketch funtime screen saver
@@ -560,7 +571,7 @@ class RawPanel():
         """
         return [{"Command": {"SetSleepScreenSaver": {"Value": value}}}]
 
-    def _set_dimmed_gain(self, value: int = 0):
+    def _set_dimmed_gain(self, value: int = 0) -> list:
         """
         Sets the gain level (0, 1-64) for the dimmed button state on the panel.
         Full gain is 64, a good dimmed value is around 4-16.
@@ -568,7 +579,7 @@ class RawPanel():
         """
         return [{"Command": {"SetDimmedGain": {"Value": value}}}]
 
-    def _set_panel_brightness(self, x: int = 8, y: int | None = None):
+    def _set_panel_brightness(self, x: int = 8, y: int | None = None) -> list:
         """
         Brightness for LEDs (x) and OLEDs (y). Value range 0-8.
         """
@@ -576,8 +587,13 @@ class RawPanel():
             y = x
         return [{"Command": {"PanelBrightness": {"LEDs": x, "OLEDs": y}}}]
 
-    def _set_mode(self, hwcid, state=None,
-                  blink_pattern=None, output=False):
+    def _set_mode(
+        self,
+        hwcid: int,
+        state: int | None = None,
+        blink_pattern: int | None = None,
+        output: bool = False,
+    ) -> dict:
         msg = {
             "HWCIDs": [hwcid],
             "HWCMode": {}
@@ -590,7 +606,7 @@ class RawPanel():
             msg["HWCMode"]["Output"] = True
         return msg
 
-    def _move_fader(self, hwcid, value):
+    def _move_fader(self, hwcid: int, value: int | None) -> dict:
         msg = {
             "HWCIDs": [hwcid],
             "HWCExtended": {
@@ -601,7 +617,9 @@ class RawPanel():
             msg["HWCExtended"]["Value"] = value
         return msg
 
-    def _set_color(self, hwcid, index=None, rgb=None):
+    def _set_color(
+        self, hwcid: int, index: int | None = None, rgb: dict | None = None
+    ) -> dict:
         if rgb:
             color = {
                 "ColorRGB": rgb
@@ -622,9 +640,15 @@ class RawPanel():
         }
         return msg
 
-    def _set_text(self, hwcid, value1=None, title=None,
-                  solid_header=False, text1=None,
-                  formatting=7):
+    def _set_text(
+        self,
+        hwcid: int,
+        value1: int | None = None,
+        title: str | None = None,
+        solid_header: bool = False,
+        text1: str | None = None,
+        formatting: int = 7,
+    ) -> dict:
         msg = {
             "HWCIDs": [hwcid],
             "HWCText": {}
@@ -641,10 +665,19 @@ class RawPanel():
             msg["HWCText"]["Formatting"] = formatting
         return msg
 
-    def _set_audio_meter(self, hwcid, meter_type=1, mono=0,
-                         title=None, w=176, h=32,
-                         data1=None, peak1=None,
-                         data2=None, peak2=None):
+    def _set_audio_meter(
+        self,
+        hwcid: int,
+        meter_type: int = 1,
+        mono: int = 0,
+        title: str | None = None,
+        w: int = 176,
+        h: int = 32,
+        data1: int | None = None,
+        peak1: int | None = None,
+        data2: int | None = None,
+        peak2: int | None = None,
+    ) -> dict:
         msg = {
             "HWCIDs": [hwcid],
             "Processors": {
