@@ -344,6 +344,16 @@ class Meters(Store):
         self.current_index: int | None = None
 
     @property
+    def previous_levels(self) -> list | None:
+        """Previous meter samples, or None when everything should be sent."""
+        if self.current_index is None:
+            return None
+        try:
+            return self.get(f"mix/level/{(self.current_index - 1) % 15}")
+        except KeyError:
+            return None
+
+    @property
     def idle(self) -> bool:
         peaks = self.data.get("mix/level/peaks")
         if not peaks:

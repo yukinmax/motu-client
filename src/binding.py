@@ -640,17 +640,6 @@ class PanelController:
             self._meter_multipliers[target.hwcid] = multiplier
             return multiplier
 
-    @property
-    def _previous_meter_levels(self) -> list | None:
-        """Previous meter samples, or None when everything should be sent."""
-        index = self._ms.current_index if self._ms else None
-        if index is None:
-            return None
-        try:
-            return self._ms.get(f"mix/level/{(index - 1) % 15}")
-        except KeyError:
-            return None
-
     def _is_channel_changed(
         self,
         ch: int,
@@ -699,7 +688,7 @@ class PanelController:
             return
 
         level_samples, peak_samples = self._split_meter_payload(d)
-        prev_levels = self._previous_meter_levels
+        prev_levels = self._ms.previous_levels if self._ms else None
         prev_peaks = self._last_peaks
         await self._panel.wakeup()
         messages = []
