@@ -57,8 +57,8 @@ def generate_client_id() -> int:
 
 
 @dataclass(slots=True)
-class HttpResult:
-    """Minimal response shape used by Store / DataStore."""
+class _HttpResult:
+    """Minimal response shape used by _Store / DataStore."""
 
     status_code: int
     reason: str | None
@@ -119,7 +119,7 @@ class HTTPClient:
         data: bytes | str | None = None,
         retries: int | None = None,
         timeout: float | None = None,
-    ) -> HttpResult | None:
+    ) -> _HttpResult | None:
         if not self.started:
             logger.error("HTTP request attempted before session start: %s", url)
             return None
@@ -153,7 +153,7 @@ class HTTPClient:
                         body = None
                         if status == 200:
                             body = await resp.json(content_type=None)
-                        return HttpResult(status, reason, etag, body)
+                        return _HttpResult(status, reason, etag, body)
 
                     if status != 304:
                         logger.error("Error code %s - %s", status, reason)
@@ -172,7 +172,7 @@ class HTTPClient:
                 await asyncio.sleep(self._retry_interval_sec)
 
 
-class Store:
+class _Store:
     def __init__(
         self,
         http: HTTPClient,
@@ -279,7 +279,7 @@ class Store:
         self._change_controller = controller
 
 
-class DataStore(Store):
+class DataStore(_Store):
     def __init__(
         self,
         http: HTTPClient,
@@ -290,7 +290,7 @@ class DataStore(Store):
         self.base_path = "datastore"
         self.client_id = generate_client_id()
 
-    async def set(self, path: str, value: Any) -> HttpResult | None:
+    async def set(self, path: str, value: Any) -> _HttpResult | None:
         data = f"json={json.dumps({path: value})}".encode()
         response = await self.http.request(
             self._url(),
@@ -327,7 +327,7 @@ class DataStore(Store):
         return None
 
 
-class Meters(Store):
+class Meters(_Store):
     def __init__(
         self,
         http: HTTPClient,
