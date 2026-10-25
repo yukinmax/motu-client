@@ -1,14 +1,15 @@
-from quart import Quart, request
 import json
 import logging
 import os
+
 from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
-import motu
-import raw_panel
+from quart import Quart, request
+
 import binding
 import mappings
-
+import motu
+import raw_panel
 
 _VALID_LOG_LEVELS = {
     "CRITICAL": logging.CRITICAL,

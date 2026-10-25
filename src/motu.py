@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import aiohttp
 import asyncio
 import json
 import logging
@@ -9,6 +8,8 @@ import random
 import time
 from dataclasses import dataclass
 from typing import Any
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
 

@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import logging
 import math
-import time
 import re
+import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, Tuple
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import raw_panel
@@ -168,7 +169,7 @@ class ControlMap:
     def __len__(self) -> int:
         return len(self._bindings)
 
-    def items(self) -> Iterable[Tuple[str, BindingConfig]]:
+    def items(self) -> Iterable[tuple[str, BindingConfig]]:
         return self._bindings.items()
 
     def keys(self) -> Iterable[str]:
@@ -246,7 +247,7 @@ class FeedbackMap:
     def __len__(self) -> int:
         return len(self._bindings)
 
-    def items(self) -> Iterable[Tuple[str, tuple[FeedbackTarget, ...]]]:
+    def items(self) -> Iterable[tuple[str, tuple[FeedbackTarget, ...]]]:
         return self._bindings.items()
 
     def keys(self) -> Iterable[str]:

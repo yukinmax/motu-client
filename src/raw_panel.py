@@ -10,7 +10,6 @@ from typing import Any
 
 from binding import SOURCE_RAW_PANEL
 
-
 logger = logging.getLogger(__name__)
 
 def normalize_hwc_value(value: str) -> str:
@@ -22,7 +21,7 @@ def normalize_hwc_value(value: str) -> str:
         return value
 
 
-class RawPanel():
+class RawPanel:
     def __init__(
         self,
         host: str,
