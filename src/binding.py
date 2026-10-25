@@ -17,7 +17,7 @@ import logging
 import math
 import re
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -117,6 +117,20 @@ def role_from_path(path: str) -> str:
     return name
 
 
+def kind_from_name(name: str) -> str:
+    """Infer feedback kind from the raw target key."""
+
+    if name.startswith("button"):
+        return "button"
+    if name == "fader":
+        return "fader"
+    if name == "display":
+        return "display"
+    if name.startswith("display") and name[7:].isdigit():
+        return "meter"
+    return "unknown"
+
+
 @dataclass(frozen=True, slots=True)
 class BindingConfig:
     """Resolved HWC → Motu binding. Optional fields are role-specific."""
@@ -131,60 +145,6 @@ class BindingConfig:
         if self.override_index is None:
             return None
         return OVERRIDE_BASE + float(self.override_index)
-
-
-class ControlMap:
-    """hwcid → BindingConfig (roles resolved once at load)."""
-
-    def __init__(self, bindings: Mapping[str, BindingConfig]):
-        self._bindings = dict(bindings)
-
-    @classmethod
-    def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> ControlMap:
-        out: dict[str, BindingConfig] = {}
-        for hwcid, entry in raw.items():
-            path = entry["path"]
-            role = entry.get("role") or role_from_path(path)
-            default = entry.get("default_level")
-            override_index = entry.get("override_index")
-            out[str(hwcid)] = BindingConfig(
-                path=path,
-                role=role,
-                default_level_db=(float(default) if default is not None else None),
-                override_index=(
-                    int(override_index) if override_index is not None else None
-                ),
-            )
-        return cls(out)
-
-    def resolve(self, hwcid: str) -> BindingConfig | None:
-        return self._bindings.get(hwcid)
-
-    def __contains__(self, hwcid: str) -> bool:
-        return hwcid in self._bindings
-
-    def __len__(self) -> int:
-        return len(self._bindings)
-
-    def items(self) -> Iterable[tuple[str, BindingConfig]]:
-        return self._bindings.items()
-
-    def keys(self) -> Iterable[str]:
-        return self._bindings.keys()
-
-
-def kind_from_name(name: str) -> str:
-    """Infer feedback kind from the raw target key."""
-
-    if name.startswith("button"):
-        return "button"
-    if name == "fader":
-        return "fader"
-    if name == "display":
-        return "display"
-    if name.startswith("display") and name[7:].isdigit():
-        return "meter"
-    return "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,11 +166,55 @@ class FeedbackTarget:
     audio_meter: dict | None = None
 
 
-class FeedbackMap:
-    """Motu path → list of feedback targets."""
+class _Map:
+    """Shared key → value lookup. Subclasses only implement from_raw."""
 
-    def __init__(self, bindings: Mapping[str, tuple[FeedbackTarget, ...]]):
+    def __init__(self, bindings: Mapping):
         self._bindings = dict(bindings)
+
+    def resolve(self, key: str):
+        return self._bindings.get(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._bindings
+
+    def __len__(self) -> int:
+        return len(self._bindings)
+
+    def items(self):
+        return self._bindings.items()
+
+    def keys(self):
+        return self._bindings.keys()
+
+    def values(self):
+        return self._bindings.values()
+
+
+class ControlMap(_Map):
+    """hwcid → BindingConfig (roles resolved once at load)."""
+
+    @classmethod
+    def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> ControlMap:
+        out: dict[str, BindingConfig] = {}
+        for hwcid, entry in raw.items():
+            path = entry["path"]
+            role = entry.get("role") or role_from_path(path)
+            default = entry.get("default_level")
+            override_index = entry.get("override_index")
+            out[str(hwcid)] = BindingConfig(
+                path=path,
+                role=role,
+                default_level_db=(float(default) if default is not None else None),
+                override_index=(
+                    int(override_index) if override_index is not None else None
+                ),
+            )
+        return cls(out)
+
+
+class FeedbackMap(_Map):
+    """Motu path → tuple of feedback targets."""
 
     @classmethod
     def from_raw(cls, raw: Mapping[str, Mapping[str, Any]]) -> FeedbackMap:
@@ -236,21 +240,6 @@ class FeedbackMap:
                 )
             out[path] = tuple(built)
         return cls(out)
-
-    def resolve(self, path: str) -> tuple[FeedbackTarget, ...] | None:
-        return self._bindings.get(path)
-
-    def __contains__(self, path: str) -> bool:
-        return path in self._bindings
-
-    def __len__(self) -> int:
-        return len(self._bindings)
-
-    def items(self) -> Iterable[tuple[str, tuple[FeedbackTarget, ...]]]:
-        return self._bindings.items()
-
-    def keys(self) -> Iterable[str]:
-        return self._bindings.keys()
 
 
 class MotuController:
