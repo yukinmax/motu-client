@@ -125,7 +125,7 @@ async def mute_toggle() -> str:
         return "Error: No index field provided. Please specify index."
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
-    path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
+    path = f'mix/{bus}/{channel}/matrix/mute'
     value = await motu_ds.toggle(path)
     if value is None:
         return json.dumps({'status': 'FAILURE'})
@@ -140,7 +140,7 @@ async def mute_status() -> str:
         return "Error: No index field provided. Please specify index."
     bus = str(request.args['bus'])
     channel = int(request.args['index'])
-    path = 'mix/{}/{}/matrix/mute'.format(bus, channel)
+    path = f'mix/{bus}/{channel}/matrix/mute'
     return json.dumps({'status': str(motu_ds.get(path))})
 
 
@@ -152,7 +152,7 @@ async def mix_send_level_get() -> str:
         return "Error: No aux field provided. Please specify aux #."
     channel = int(request.args['chan'])
     aux = int(request.args['aux'])
-    path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)
+    path = f'mix/chan/{channel}/matrix/aux/{aux}/send'
     result = motu_ds.get(path)
     try:
         fmt = request.args['format']
@@ -165,7 +165,7 @@ async def mix_send_level_get() -> str:
             result = binding.db_to_raw(
                 result, binding.FADERS_RANGE_MAPPING
             )
-    return json.dumps({'status': '{:.10f}'.format(result)})
+    return json.dumps({'status': f'{result:.10f}'})
 
 
 @app.route('/api/v1/motu/aux-send-level', methods=['POST', 'PATCH'])
@@ -192,10 +192,10 @@ async def mix_send_level_set() -> str:
             value = binding.raw_to_db(value, binding.FADERS_RANGE_MAPPING)
         if fmt in ('db', 'raw'):
             value = motu.db_to_level(value)
-    path = 'mix/chan/{}/matrix/aux/{}/send'.format(channel, aux)
+    path = f'mix/chan/{channel}/matrix/aux/{aux}/send'
     await motu_ds.set(path, value)
     result = motu_ds.get(path)
-    return json.dumps({'status': '{:.10f}'.format(result)})
+    return json.dumps({'status': f'{result:.10f}'})
 
 
 if __name__ == "__main__":
