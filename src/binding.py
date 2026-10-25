@@ -1,14 +1,14 @@
 """Motu ↔ panel change controllers and maps.
 
-Protocol shared by RawPanel and Store:
+Protocol shared by RawPanel and _Store:
 
   set_change_controller(controller)
   controller.on_change(data, *, source: str)
 
 Sources:
   "raw_panel"  — HWC event: data = {"hwcid": str, "value": str}
-  "datastore"  — Motu path diff (Store.base_path)
-  "meters"     — Motu meters diff (Store.base_path)
+  "datastore"  — Motu path diff (_Store.base_path)
+  "meters"     — Motu meters diff (_Store.base_path)
 """
 
 from __future__ import annotations
