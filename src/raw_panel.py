@@ -12,10 +12,11 @@ from binding import SOURCE_RAW_PANEL
 
 logger = logging.getLogger(__name__)
 
+
 def normalize_hwc_value(value: str) -> str:
     """Panel protocol: strip optional prefix ('State:Down' → 'Down')."""
     try:
-        _prefix, v = value.split(':', 1)
+        _prefix, v = value.split(":", 1)
         return v
     except ValueError:
         return value
@@ -26,7 +27,7 @@ class RawPanel:
         self,
         host: str,
         port: int = 9923,
-        mode: str = 'ASCII',
+        mode: str = "ASCII",
         delay: float = 0.01,
         idle_sleep: float = 0.1,
         sleep_timeout_minutes: int = 0,
@@ -87,7 +88,7 @@ class RawPanel:
             "EnvironmentalHealth": self._update_environmental_health,
             "DimmedGain": self._update_dimmed_gain,
             "map": self._update_map,
-            "HWC": self._hardware_change_schedule
+            "HWC": self._hardware_change_schedule,
         }
         self._hw_change_buffer = {}
         self.last_activity = 0.0
@@ -101,31 +102,31 @@ class RawPanel:
         logger.debug("Updated System Stats")
 
     def _update_model(self, value: str) -> None:
-        self.info['model'] = value
+        self.info["model"] = value
 
     def _update_serial(self, value: str) -> None:
-        self.info['serial'] = value
+        self.info["serial"] = value
 
     def _update_version(self, value: str) -> None:
-        self.info['version'] = value
+        self.info["version"] = value
 
     def _update_name(self, value: str) -> None:
-        self.info['name'] = value
+        self.info["name"] = value
 
     def _update_platform(self, value: str) -> None:
-        self.info['platform'] = value
+        self.info["platform"] = value
 
     def _update_blue_pill_ready(self, value: str) -> None:
-        self.info['bluePillReady'] = value
+        self.info["bluePillReady"] = value
 
     def _update_panel_type(self, value: str) -> None:
-        self.info['panelType'] = value
+        self.info["panelType"] = value
 
     def _update_support(self, value: str) -> None:
-        self.info['support'] = value
+        self.info["support"] = value
 
     async def _update_is_sleeping(self, value: str) -> None:
-        prev_state = self.info['isSleeping']
+        prev_state = self.info["isSleeping"]
         new_state = bool(int(value))
         if new_state == prev_state:
             return
@@ -134,7 +135,7 @@ class RawPanel:
         else:
             sleep_state_str = f"{new_state}"
         logger.info("Sleeping: %s", sleep_state_str)
-        self.info['isSleeping'] = new_state
+        self.info["isSleeping"] = new_state
         if not new_state and (prev_state or prev_state is None):
             # Init feedback only after panel wakes up or initializes
             await asyncio.sleep(1.0)
@@ -142,7 +143,7 @@ class RawPanel:
                 await self._feedback_controller.init_feedback()
 
     def _update_panel_sleep_timeout(self, value: str) -> None:
-        prev_state = self.info['panel_sleep_timeout']
+        prev_state = self.info["panel_sleep_timeout"]
         new_state = int(value)
         if new_state == prev_state:
             return
@@ -151,10 +152,10 @@ class RawPanel:
         else:
             sleep_timer_str = f"{new_state}"
         logger.info("Internal Panel Sleep Timer: %s", sleep_timer_str)
-        self.info['panel_sleep_timeout'] = new_state
+        self.info["panel_sleep_timeout"] = new_state
 
     def _update_environmental_health(self, value: str) -> None:
-        self.info['EnvironmentalHealth'] = value
+        self.info["EnvironmentalHealth"] = value
 
     def _update_dimmed_gain(self, value: str) -> None:
         self.info["DimmedGain"] = value
@@ -172,9 +173,8 @@ class RawPanel:
     def _hardware_change_schedule(self, hwcid: str, value: str) -> None:
         t = time.perf_counter()
         self.last_activity = t
-        change = self._hw_change_buffer.setdefault(hwcid, {'time': t,
-                                                          'value': None})
-        change['value'] = value
+        change = self._hw_change_buffer.setdefault(hwcid, {"time": t, "value": None})
+        change["value"] = value
 
     async def _hardware_change_process(self, hwcid: str, value: str) -> None:
         await self.wakeup()
@@ -187,10 +187,9 @@ class RawPanel:
             source=SOURCE_RAW_PANEL,
         )
 
-
     def _configure_socket(self, writer: asyncio.StreamWriter) -> None:
         """Keepalive for dead-peer detection;
-           TCP_NODELAY for low-latency meters."""
+        TCP_NODELAY for low-latency meters."""
         sock = writer.get_extra_info("socket")
         if sock is None:
             return
@@ -252,7 +251,7 @@ class RawPanel:
                             self.host,
                             self.port,
                         ),
-                        timeout=timeout
+                        timeout=timeout,
                     )
                 except (ConnectionRefusedError, OSError, TimeoutError) as e:
                     logger.warning(
@@ -296,10 +295,12 @@ class RawPanel:
         await self.send(self._set_sleep_timeout(self.sleep_timeout_ms))
         await self.send(self._set_sleep_mode(self.sleep_mode))
         await self.send(self._set_sleep_screen_saver(self.sleep_screen_saver))
-        await self.send(self._set_panel_brightness(
-            self.panel_brightness_leds,
-            self.panel_brightness_oleds,
-        ))
+        await self.send(
+            self._set_panel_brightness(
+                self.panel_brightness_leds,
+                self.panel_brightness_oleds,
+            )
+        )
         await self.send(self._set_dimmed_gain(self.panel_dimmed_gain))
         # Yield for other background tasks
         await asyncio.sleep(0)
@@ -307,9 +308,7 @@ class RawPanel:
 
     async def disconnect(self, purge: bool = False) -> None:
         if self._disconnect_in_progress:
-            logger.info(
-                "Another disconnect is in progress, disconnect aborted"
-            )
+            logger.info("Another disconnect is in progress, disconnect aborted")
             return
         if self._connection_in_progress:
             logger.info("Connect is in progress, disconnect aborted")
@@ -352,19 +351,13 @@ class RawPanel:
     async def handle_lost_connection(self) -> None:
         logger.warning("Connection to %s:%s was lost", self.host, self.port)
         if self._stopped:
-            logger.info(
-                "Shutdown is in progress, not handling lost connection"
-            )
+            logger.info("Shutdown is in progress, not handling lost connection")
             return
         if self._disconnect_in_progress:
-            logger.info(
-                "Disconnect is in progress, not handling lost connection"
-            )
+            logger.info("Disconnect is in progress, not handling lost connection")
             return
         if self._connection_in_progress:
-            logger.info(
-                "Connect is in progress, not handling lost connection"
-            )
+            logger.info("Connect is in progress, not handling lost connection")
             return
         await self.disconnect(purge=True)
 
@@ -380,19 +373,19 @@ class RawPanel:
 
     async def handle_request(self, request: str) -> None:
         try:
-            key, value = request.split('=', 1)
+            key, value = request.split("=", 1)
         except ValueError:
             if not len(request):
                 logger.debug("Request is empty line")
                 return
-            elif request == 'nack':
+            elif request == "nack":
                 logger.warning("Request is 'nack'")
                 return
             else:
                 logger.warning("Invalid request: %s", request)
                 return
         try:
-            command, hwcid = key.split('#')
+            command, hwcid = key.split("#")
         except ValueError:
             command = key
             params = (value,)
@@ -418,8 +411,8 @@ class RawPanel:
                     continue
                 for hwid, v in self._hw_change_buffer.items():
                     t = time.perf_counter()
-                    value = v['value']
-                    if t - v['time'] >= self.delay:
+                    value = v["value"]
+                    if t - v["time"] >= self.delay:
                         del self._hw_change_buffer[hwid]
                         await self._hardware_change_process(hwid, value)
                     break
@@ -463,25 +456,22 @@ class RawPanel:
             return states[0]
         return [{"States": states}]
 
-    async def send(
-        self, message: dict | list, timeout: int | float = 1
-    ) -> None:
+    async def send(self, message: dict | list, timeout: int | float = 1) -> None:
         if self._stopped:
             return
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while (
-            not self._stopped
-            and (self._connection_in_progress or self._disconnect_in_progress)
+        while not self._stopped and (
+            self._connection_in_progress or self._disconnect_in_progress
         ):
             await asyncio.sleep(0.1)
         if self._stopped or not self.connected or self._writer is None:
             return
 
-        payload = json.dumps(message, separators=(',', ':'))
+        payload = json.dumps(message, separators=(",", ":"))
         logger.debug(payload)
         try:
-            self._writer.write(f"{payload}\n".encode('ascii'))
+            self._writer.write(f"{payload}\n".encode("ascii"))
             await asyncio.wait_for(self._writer.drain(), timeout=timeout)
             transport = self._writer.transport
             logger.debug(
@@ -503,9 +493,8 @@ class RawPanel:
             return None
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while (
-            not self._stopped
-            and (self._connection_in_progress or self._disconnect_in_progress)
+        while not self._stopped and (
+            self._connection_in_progress or self._disconnect_in_progress
         ):
             await asyncio.sleep(0.1)
         if self._stopped or not self.connected or self._reader is None:
@@ -593,10 +582,7 @@ class RawPanel:
         blink_pattern: int | None = None,
         output: bool = False,
     ) -> dict:
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCMode": {}
-        }
+        msg = {"HWCIDs": [hwcid], "HWCMode": {}}
         if state:
             msg["HWCMode"]["State"] = state
         if blink_pattern:
@@ -606,12 +592,7 @@ class RawPanel:
         return msg
 
     def _move_fader(self, hwcid: int, value: int | None) -> dict:
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCExtended": {
-                "Interpretation": 5
-            }
-        }
+        msg = {"HWCIDs": [hwcid], "HWCExtended": {"Interpretation": 5}}
         if value:
             msg["HWCExtended"]["Value"] = value
         return msg
@@ -620,23 +601,12 @@ class RawPanel:
         self, hwcid: int, index: int | None = None, rgb: dict | None = None
     ) -> dict:
         if rgb:
-            color = {
-                "ColorRGB": rgb
-            }
+            color = {"ColorRGB": rgb}
         elif index:
-            color = {
-                "ColorIndex": {
-                    "Index": index
-                }
-            }
+            color = {"ColorIndex": {"Index": index}}
         else:
-            color = {
-                "ColorIndex": {}
-            }
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCColor": color
-        }
+            color = {"ColorIndex": {}}
+        msg = {"HWCIDs": [hwcid], "HWCColor": color}
         return msg
 
     def _set_text(
@@ -648,10 +618,7 @@ class RawPanel:
         text1: str | None = None,
         formatting: int = 7,
     ) -> dict:
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCText": {}
-        }
+        msg = {"HWCIDs": [hwcid], "HWCText": {}}
         if value1:
             msg["HWCText"]["IntegerValue"] = value1
         if title:
@@ -679,13 +646,7 @@ class RawPanel:
     ) -> dict:
         msg = {
             "HWCIDs": [hwcid],
-            "Processors": {
-                "Audiometer": {
-                    "MeterType": meter_type,
-                    "W": w,
-                    "H": h
-                }
-            }
+            "Processors": {"Audiometer": {"MeterType": meter_type, "W": w, "H": h}},
         }
         if mono:
             msg["Processors"]["Audiometer"]["Mono"] = mono

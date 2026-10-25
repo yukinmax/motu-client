@@ -27,6 +27,7 @@ DEFAULT_HOSTNAME = "ultralite-avb.local"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def limit_to_range(value: float, minimum: float, maximum: float) -> float:
     return max(min(value, maximum), minimum)
 
@@ -48,10 +49,7 @@ def db_to_level(db_value: int | float) -> float:
 
 
 def dict_diff(d_old: dict, d_new: dict) -> dict:
-    return {
-        k: v for k, v in d_new.items()
-        if k not in d_old or d_old[k] != v
-    }
+    return {k: v for k, v in d_new.items() if k not in d_old or d_old[k] != v}
 
 
 def generate_client_id() -> int:
@@ -123,9 +121,7 @@ class HTTPClient:
         timeout: float | None = None,
     ) -> HttpResult | None:
         if not self.started:
-            logger.error(
-                "HTTP request attempted before session start: %s", url
-            )
+            logger.error("HTTP request attempted before session start: %s", url)
             return None
 
         headers: dict[str, str] = {}
@@ -362,15 +358,11 @@ class Meters(Store):
         return not any(peaks)
 
     def _update_peaks(self) -> dict:
-        filtered_data = {
-            k: v for k, v in self.data.items() if not k.endswith("peaks")
-        }
+        filtered_data = {k: v for k, v in self.data.items() if not k.endswith("peaks")}
         if not filtered_data:
             return {}
         peaks = {
-            "mix/level/peaks": [
-                max(values) for values in zip(*filtered_data.values())
-            ]
+            "mix/level/peaks": [max(values) for values in zip(*filtered_data.values())]
         }
         self.data.update(peaks)
         logger.debug("Modified: %s -> %s", self.base_path, peaks)

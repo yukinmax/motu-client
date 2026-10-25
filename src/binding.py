@@ -51,7 +51,6 @@ METERS_RANGE_MAPPING = (
 _PATH_ROLE_RE = re.compile(r"(\w+)/?(\d*)$")
 
 
-
 def _segments(mapping: tuple, *, reverse: bool = False) -> tuple:
     """Point (src, dst) or range ((lo, hi), (dst_lo, dst_hi)) → segments."""
     out = []
@@ -60,9 +59,7 @@ def _segments(mapping: tuple, *, reverse: bool = False) -> tuple:
             src, dst = (src, src), (dst, dst)
         if reverse:
             src, dst = dst, src
-        out.append((
-            float(src[0]), float(src[1]), float(dst[0]), float(dst[1])
-        ))
+        out.append((float(src[0]), float(src[1]), float(dst[0]), float(dst[1])))
     return tuple(out)
 
 
@@ -90,7 +87,8 @@ def _lerp(value: float, segments: tuple) -> float:
 def raw_to_db(value: int | float, range_mapping: tuple) -> float:
     """Panel raw → dB. Accepts int or float."""
     segments = (
-        _FADERS_RAW_TO_DB if range_mapping is FADERS_RANGE_MAPPING
+        _FADERS_RAW_TO_DB
+        if range_mapping is FADERS_RANGE_MAPPING
         else _METERS_RAW_TO_DB
     )
     return _lerp(float(value), segments)
@@ -99,7 +97,8 @@ def raw_to_db(value: int | float, range_mapping: tuple) -> float:
 def db_to_raw(value: int | float, range_mapping: tuple) -> int:
     """dB → panel raw. Accepts int or float."""
     segments = (
-        _FADERS_DB_TO_RAW if range_mapping is FADERS_RANGE_MAPPING
+        _FADERS_DB_TO_RAW
+        if range_mapping is FADERS_RANGE_MAPPING
         else _METERS_DB_TO_RAW
     )
     return int(_lerp(float(value), segments))
@@ -151,9 +150,7 @@ class ControlMap:
             out[str(hwcid)] = BindingConfig(
                 path=path,
                 role=role,
-                default_level_db=(
-                    float(default) if default is not None else None
-                ),
+                default_level_db=(float(default) if default is not None else None),
                 override_index=(
                     int(override_index) if override_index is not None else None
                 ),
@@ -222,19 +219,21 @@ class FeedbackMap:
             built: list[FeedbackTarget] = []
             for name, cfg in targets.items():
                 channels = cfg.get("channels")
-                built.append(FeedbackTarget(
-                    kind=kind_from_name(name),
-                    hwcid=int(cfg["hwcid"]),
-                    mode=cfg.get("mode"),
-                    color=cfg.get("color"),
-                    value=cfg.get("value"),
-                    text=cfg.get("text"),
-                    channels=tuple(channels) if channels is not None else None,
-                    pre_fader=bool(cfg.get("pre_fader", True)),
-                    fader_path=cfg.get("fader_path"),
-                    mute_path=cfg.get("mute_path"),
-                    audio_meter=cfg.get("audio_meter"),
-                ))
+                built.append(
+                    FeedbackTarget(
+                        kind=kind_from_name(name),
+                        hwcid=int(cfg["hwcid"]),
+                        mode=cfg.get("mode"),
+                        color=cfg.get("color"),
+                        value=cfg.get("value"),
+                        text=cfg.get("text"),
+                        channels=tuple(channels) if channels is not None else None,
+                        pre_fader=bool(cfg.get("pre_fader", True)),
+                        fader_path=cfg.get("fader_path"),
+                        mute_path=cfg.get("mute_path"),
+                        audio_meter=cfg.get("audio_meter"),
+                    )
+                )
             out[path] = tuple(built)
         return cls(out)
 
@@ -273,9 +272,7 @@ class MotuController:
 
     async def on_change(self, data: dict, *, source: str) -> None:
         if self._ds is None:
-            logger.debug(
-                "MotuController: no datastore; ignore source=%s", source
-            )
+            logger.debug("MotuController: no datastore; ignore source=%s", source)
             return
         if source != SOURCE_RAW_PANEL:
             logger.debug("MotuController: ignore source=%s", source)
@@ -297,11 +294,7 @@ class MotuController:
             return
         await handler(cfg, value)
 
-    def _level_from_panel_value(
-        self,
-        cfg: BindingConfig,
-        v: str
-    ) -> float | None:
+    def _level_from_panel_value(self, cfg: BindingConfig, v: str) -> float | None:
         try:
             raw = int(v)
         except ValueError:
@@ -341,9 +334,7 @@ class MotuController:
         if v != "Down":
             return
         if cfg.override_value is None:
-            logger.warning(
-                "Missing override_index for %s", cfg.path
-            )
+            logger.warning("Missing override_index for %s", cfg.path)
             return
         current = self._ds.get(cfg.path)
         if current == cfg.override_value:
@@ -393,7 +384,8 @@ class PanelController:
     @property
     def _meter_targets(self) -> tuple[FeedbackTarget, ...]:
         return tuple(
-            target for target in (self._map.resolve("mix/level") or ())
+            target
+            for target in (self._map.resolve("mix/level") or ())
             if target.kind == "meter"
         )
 
@@ -401,8 +393,8 @@ class PanelController:
         for target in self._meter_targets:
             if path not in (target.fader_path, target.mute_path):
                 continue
-            self._meter_multipliers[target.hwcid] = (
-                self._calculate_meter_multiplier(target)
+            self._meter_multipliers[target.hwcid] = self._calculate_meter_multiplier(
+                target
             )
 
     async def on_change(self, data: dict, *, source: str) -> None:
@@ -549,9 +541,7 @@ class PanelController:
                 self._update_meter_multiplier_for_path(path)
                 if tail in ("send", "fader"):
                     db_value = motu.level_to_db(value)
-                    raw_value = db_to_raw(
-                        db_value, self._faders_range_mapping
-                    )
+                    raw_value = db_to_raw(db_value, self._faders_range_mapping)
             for target in mapping:
                 handler = self._kind_handlers.get(target.kind)
                 if handler is None:
@@ -573,42 +563,32 @@ class PanelController:
         if batched is not None:
             await self._panel.send(batched)
 
-    def _calculate_meter_multiplier(
-        self, target: FeedbackTarget
-    ) -> float | None:
+    def _calculate_meter_multiplier(self, target: FeedbackTarget) -> float | None:
         if target.pre_fader:
             return 1.0
         try:
             fader = self._ds.get(target.fader_path)
             muted = self._ds.get(target.mute_path)
         except KeyError:
-            logger.warning(
-                "fader_path and mute_path required when pre_fader is False"
-            )
+            logger.warning("fader_path and mute_path required when pre_fader is False")
             return None
         return float(fader) * float(not muted)
 
     @staticmethod
-    def _get_meter_sample(
-        samples: list | None, index: int | None
-    ) -> float | None:
+    def _get_meter_sample(samples: list | None, index: int | None) -> float | None:
         try:
             return samples[index]
         except (KeyError, IndexError, TypeError):
             return None
 
-    def _get_channel_by_slot(
-        self, channels: tuple[int, ...], slot: int
-    ) -> int | None:
+    def _get_channel_by_slot(self, channels: tuple[int, ...], slot: int) -> int | None:
         """Return the channels[slot], or None if missing."""
         try:
             return channels[slot]
         except IndexError:
             return None
 
-    def _meter_level_to_raw(
-        self, value: int, multiplier: float = 1.0
-    ) -> int:
+    def _meter_level_to_raw(self, value: int, multiplier: float = 1.0) -> int:
         """Meter sample (0–1000 scale) → panel raw."""
         linear = value * multiplier / 1000
         db = motu.level_to_db(linear)
@@ -649,17 +629,14 @@ class PanelController:
         peaks: list | None,
         prev_peaks: list | None,
     ) -> bool:
-        if (
-            prev_levels is None
-            or self._get_meter_sample(levels, ch)
-            != self._get_meter_sample(prev_levels, ch)
-        ):
+        if prev_levels is None or self._get_meter_sample(
+            levels, ch
+        ) != self._get_meter_sample(prev_levels, ch):
             return True
         if peaks is None or prev_peaks is None:
             return peaks is not None
-        return (
-            self._get_meter_sample(peaks, ch)
-            != self._get_meter_sample(prev_peaks, ch)
+        return self._get_meter_sample(peaks, ch) != self._get_meter_sample(
+            prev_peaks, ch
         )
 
     def _bundle_meter_samples(
@@ -675,7 +652,8 @@ class PanelController:
                 channel = self._get_channel_by_slot(channels, slot)
                 sample = self._get_meter_sample(samples, channel)
                 bundle.append(
-                    None if sample is None
+                    None
+                    if sample is None
                     else self._meter_level_to_raw(sample, multiplier)
                 )
         return bundle
@@ -724,14 +702,16 @@ class PanelController:
                 channels,
                 multiplier,
             )
-            messages.append(self._panel._set_audio_meter(
-                target.hwcid,
-                data1=bundle[0],
-                data2=bundle[1],
-                peak1=bundle[2],
-                peak2=bundle[3],
-                **audio_meter,
-            ))
+            messages.append(
+                self._panel._set_audio_meter(
+                    target.hwcid,
+                    data1=bundle[0],
+                    data2=bundle[1],
+                    peak1=bundle[2],
+                    peak2=bundle[3],
+                    **audio_meter,
+                )
+            )
         batched = self._panel.batch_hwc(messages)
         if batched is not None:
             await self._panel.send(batched)
