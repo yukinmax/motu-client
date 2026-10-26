@@ -297,8 +297,8 @@ class RawPanel:
         await self.send(self._set_sleep_screen_saver(self.sleep_screen_saver))
         await self.send(
             self._set_panel_brightness(
-                self.panel_brightness_leds,
-                self.panel_brightness_oleds,
+                leds=self.panel_brightness_leds,
+                oleds=self.panel_brightness_oleds,
             )
         )
         await self.send(self._set_dimmed_gain(self.panel_dimmed_gain))
@@ -540,40 +540,53 @@ class RawPanel:
     def _get_sleep_timeout(self) -> list:
         return [{"Command": {"GetSleepTimeout": True}}]
 
-    def _set_sleep_timeout(self, timeout_ms: int) -> list:
-        return [{"Command": {"SetSleepTimeout": {"Value": timeout_ms}}}]
+    def _set_sleep_timeout(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default."""
+        payload = {} if value is None else {"Value": value}
+        return [{"Command": {"SetSleepTimeout": payload}}]
 
-    def _set_sleep_mode(self, value: int = 0) -> list:
-        """
-        0 = FireWorks (Default) - LEDs will animate on the panel
+    def _set_sleep_mode(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default.
+
+        0 = FireWorks - LEDs animate on the panel
         1 = Buttons Off
         """
-        return [{"Command": {"SetSleepMode": {"Value": value}}}]
+        payload = {} if value is None else {"Mode": value}
+        return [{"Command": {"SetSleepMode": payload}}]
 
-    def _set_sleep_screen_saver(self, value: int = 0) -> list:
-        """
-        0 = "Wake Up On Key Press" message (default)
-        1 = "Sheep And Goats" - Classic UniSketch funtime screen saver
-        2 = "Save The Oleds" message
-        3 = Just Dimmed - keeps content, just dims the panel
-        """
-        return [{"Command": {"SetSleepScreenSaver": {"Value": value}}}]
+    def _set_sleep_screen_saver(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default.
 
-    def _set_dimmed_gain(self, value: int = 0) -> list:
+        0 = "Wake Up On Key Press"
+        1 = "Sheep And Goats"
+        2 = "Save The Oleds"
+        3 = Just Dimmed - keeps content, dims the panel
         """
-        Sets the gain level (0, 1-64) for the dimmed button state on the panel.
-        Full gain is 64, a good dimmed value is around 4-16.
-        Setting DimmedGain to zero will reset it to the panel defaults (10-16).
-        """
-        return [{"Command": {"SetDimmedGain": {"Value": value}}}]
+        payload = {} if value is None else {"Type": value}
+        return [{"Command": {"SetSleepScreenSaver": payload}}]
 
-    def _set_panel_brightness(self, x: int = 8, y: int | None = None) -> list:
+    def _set_dimmed_gain(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default.
+
+        Gain is 0 or 1-64. Full gain is 64, a good dimmed value is 4-16.
+        0 resets to the panel defaults (10-16).
         """
-        Brightness for LEDs (x) and OLEDs (y). Value range 0-8.
+        payload = {} if value is None else {"Value": value}
+        return [{"Command": {"SetDimmedGain": payload}}]
+
+    def _set_panel_brightness(
+        self, *, leds: int | None = None, oleds: int | None = None
+    ) -> list:
+        """LED and OLED brightness, range 0-8.
+
+        A missing field is set to 0 by the panel. {} sets both to 0.
         """
-        if y is None:
-            y = x
-        return [{"Command": {"PanelBrightness": {"LEDs": x, "OLEDs": y}}}]
+        payload = {}
+        if leds is not None:
+            payload["LEDs"] = leds
+        if oleds is not None:
+            payload["OLEDs"] = oleds
+        return [{"Command": {"PanelBrightness": payload}}]
 
     def _set_mode(
         self,
