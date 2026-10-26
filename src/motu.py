@@ -290,7 +290,9 @@ class DataStore(_Store):
         self.base_path = "datastore"
         self.client_id = generate_client_id()
 
-    async def set(self, path: str, value: Any) -> _HttpResult | None:
+    async def set(
+        self, path: str, value: Any, *, origin: str | None = None
+    ) -> _HttpResult | None:
         data = f"json={json.dumps({path: value})}".encode()
         response = await self.http.request(
             self._url(),
@@ -300,16 +302,13 @@ class DataStore(_Store):
             retries=DEFAULT_MUTATE_RETRIES,
             timeout=DEFAULT_MUTATE_TIMEOUT_SEC,
         )
-        # Check if path value was actually modified
         if response is not None:
             data_diff = {path: value}
             self.data.update(data_diff)
             logger.debug("Modified: %s -> %s", self.base_path, data_diff)
             if self._change_controller:
-                # TODO: Avoid sending feedback for the fader
-                # that caused the data change to eliminate feedback loop.
                 await self._change_controller.on_change(
-                    {path: value}, source=self.base_path
+                    {path: value}, source=self.base_path, origin=origin
                 )
         return response
 

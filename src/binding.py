@@ -281,7 +281,7 @@ class MotuController:
         if handler is None:
             logger.debug("Unhandled role %s for hwcid %s", cfg.role, hwcid)
             return
-        await handler(cfg, value)
+        await handler(cfg, value, hwcid)
 
     def _level_from_panel_value(self, cfg: BindingConfig, v: str) -> float | None:
         try:
@@ -298,18 +298,18 @@ class MotuController:
         db = raw_to_db(raw, self._range_mapping)
         return motu.db_to_level(db)
 
-    async def _handle_send(self, cfg: BindingConfig, v: str) -> None:
+    async def _handle_send(self, cfg: BindingConfig, v: str, hwcid: str | int) -> None:
         level = self._level_from_panel_value(cfg, v)
         if level is None:
             return
-        await self._ds.set(cfg.path, level)
+        await self._ds.set(cfg.path, level, origin=str(hwcid))
 
-    async def _handle_mute(self, cfg: BindingConfig, v: str) -> None:
+    async def _handle_mute(self, cfg: BindingConfig, v: str, hwcid: str | int) -> None:
         if v != "Down":
             return
         await self._ds.toggle(cfg.path)
 
-    async def _handle_solo(self, cfg: BindingConfig, v: str) -> None:
+    async def _handle_solo(self, cfg: BindingConfig, v: str, hwcid: str | int) -> None:
         if v != "Down":
             return
         override = self._ds.get(OVERRIDE_PATH)
@@ -319,7 +319,9 @@ class MotuController:
             await self._ds.toggle(cfg.path)
         await self._ds.set(OVERRIDE_PATH, OVERRIDE_DISABLED)
 
-    async def _handle_override(self, cfg: BindingConfig, v: str) -> None:
+    async def _handle_override(
+        self, cfg: BindingConfig, v: str, hwcid: str | int
+    ) -> None:
         if v != "Down":
             return
         if cfg.override_value is None:
@@ -386,12 +388,14 @@ class PanelController:
                 target
             )
 
-    async def on_change(self, data: dict, *, source: str) -> None:
+    async def on_change(
+        self, data: dict, *, source: str, origin: str | None = None
+    ) -> None:
         if self._panel is None:
             logger.debug("PanelController: no panel; ignore source=%s", source)
             return
         if source == SOURCE_DATASTORE:
-            await self._process_data_feedback(data)
+            await self._process_data_feedback(data, origin=origin)
         elif source == SOURCE_METERS:
             await self._process_meters_feedback(data)
         else:
@@ -514,7 +518,9 @@ class PanelController:
             **txt,
         )
 
-    async def _process_data_feedback(self, d: dict) -> None:
+    async def _process_data_feedback(
+        self, d: dict, *, origin: str | None = None
+    ) -> None:
         # TODO: Consider waking the panel
         # TODO: Only change fader style and display txt during feedback init
         messages = []
@@ -540,10 +546,11 @@ class PanelController:
                         path,
                     )
                     continue
+                echo = origin is not None and str(target.hwcid) == origin
                 msg = handler(
                     target,
                     value=value,
-                    raw_value=raw_value,
+                    raw_value=None if echo else raw_value,
                     db_value=db_value,
                 )
                 if msg:
