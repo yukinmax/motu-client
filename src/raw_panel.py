@@ -590,7 +590,7 @@ class RawPanel:
             payload["OLEDs"] = oleds
         return [{"Command": {"PanelBrightness": payload}}]
 
-    def _set_mode(
+    def hwc_mode(
         self,
         hwcid: int,
         *,
@@ -607,13 +607,13 @@ class RawPanel:
             msg["HWCMode"]["Output"] = True
         return msg
 
-    def _move_fader(self, hwcid: int, value: int | None) -> dict:
+    def hwc_fader(self, hwcid: int, value: int | None) -> dict:
         msg = {"HWCIDs": [hwcid], "HWCExtended": {"Interpretation": 5}}
         if value:
             msg["HWCExtended"]["Value"] = value
         return msg
 
-    def _set_color(
+    def hwc_color(
         self, hwcid: int, *, index: int | None = None, rgb: dict | None = None
     ) -> dict:
         if rgb:
@@ -625,7 +625,7 @@ class RawPanel:
         msg = {"HWCIDs": [hwcid], "HWCColor": color}
         return msg
 
-    def _set_text(
+    def hwc_text(
         self,
         hwcid: int,
         *,
@@ -648,7 +648,7 @@ class RawPanel:
             msg["HWCText"]["Formatting"] = formatting
         return msg
 
-    def _set_audio_meter(
+    def hwc_meter(
         self,
         hwcid: int,
         *,

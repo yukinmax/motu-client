@@ -460,13 +460,13 @@ class PanelController:
                 key: self._pick_value_by_status(val, active)
                 for key, val in mode.items()
             }
-            msg.update(self._panel._set_mode(hwcid, **resolved))
+            msg.update(self._panel.hwc_mode(hwcid, **resolved))
         if color:
             resolved = {
                 key: self._pick_value_by_status(val, active)
                 for key, val in color.items()
             }
-            msg.update(self._panel._set_color(hwcid, **resolved))
+            msg.update(self._panel.hwc_color(hwcid, **resolved))
         return msg
 
     def _handle_button(
@@ -503,7 +503,7 @@ class PanelController:
             color=target.color,
         )
         if raw_value is not None:
-            msg.update(self._panel._move_fader(target.hwcid, raw_value))
+            msg.update(self._panel.hwc_fader(target.hwcid, raw_value))
         return msg
 
     def _handle_display(
@@ -515,7 +515,7 @@ class PanelController:
         db_value: float | None,
     ) -> dict:
         txt = target.text or {}
-        return self._panel._set_text(
+        return self._panel.hwc_text(
             target.hwcid,
             text1=db_value,
             **txt,
@@ -702,7 +702,7 @@ class PanelController:
                 multiplier,
             )
             messages.append(
-                self._panel._set_audio_meter(
+                self._panel.hwc_meter(
                     target.hwcid,
                     data1=bundle[0],
                     data2=bundle[1],
