@@ -204,6 +204,7 @@ class _Store:
 
     async def refresh(
         self,
+        *,
         diff_check: bool = False,
         handle_changes: bool = True,
     ) -> dict | None:
@@ -251,6 +252,7 @@ class _Store:
 
     async def poll(
         self,
+        *,
         diff_check: bool = True,
         handle_changes: bool = True,
         idle_interval: float = 0.0,
@@ -379,6 +381,7 @@ class Meters(_Store):
 
     async def refresh(
         self,
+        *,
         diff_check: bool = True,
         handle_changes: bool = True,
     ) -> dict | None:

@@ -450,6 +450,7 @@ class PanelController:
         self,
         hwcid: int,
         active: bool,
+        *,
         mode: dict | None = None,
         color: dict | None = None,
     ) -> dict:
@@ -586,7 +587,7 @@ class PanelController:
         except IndexError:
             return None
 
-    def _meter_level_to_raw(self, value: int, multiplier: float = 1.0) -> int:
+    def _meter_level_to_raw(self, value: int, *, multiplier: float = 1.0) -> int:
         """Meter sample (0–1000 scale) → panel raw."""
         linear = value * multiplier / 1000
         db = motu.level_to_db(linear)
@@ -652,7 +653,7 @@ class PanelController:
                 bundle.append(
                     None
                     if sample is None
-                    else self._meter_level_to_raw(sample, multiplier)
+                    else self._meter_level_to_raw(sample, multiplier=multiplier)
                 )
         return bundle
 

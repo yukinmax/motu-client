@@ -26,6 +26,7 @@ class RawPanel:
     def __init__(
         self,
         host: str,
+        *,
         port: int = 9923,
         mode: str = "ASCII",
         delay: float = 0.01,
@@ -226,6 +227,7 @@ class RawPanel:
 
     async def connect(
         self,
+        *,
         retries: int | None = 20,
         retry_interval_sec: int | float = 10,
         timeout: int | float = 10,
@@ -306,7 +308,7 @@ class RawPanel:
         await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)
 
-    async def disconnect(self, purge: bool = False) -> None:
+    async def disconnect(self, *, purge: bool = False) -> None:
         if self._disconnect_in_progress:
             logger.info("Another disconnect is in progress, disconnect aborted")
             return
@@ -361,7 +363,7 @@ class RawPanel:
             return
         await self.disconnect(purge=True)
 
-    async def wakeup(self, force: bool = False) -> None:
+    async def wakeup(self, *, force: bool = False) -> None:
         """Send wakeup message.
 
         Throttled by default so high-rate feedback does not spam the panel.
@@ -456,7 +458,7 @@ class RawPanel:
             return states[0]
         return [{"States": states}]
 
-    async def send(self, message: dict | list, timeout: int | float = 1) -> None:
+    async def send(self, message: dict | list, *, timeout: int | float = 1) -> None:
         if self._stopped:
             return
         if not self.connected:
@@ -591,6 +593,7 @@ class RawPanel:
     def _set_mode(
         self,
         hwcid: int,
+        *,
         state: int | None = None,
         blink_pattern: int | None = None,
         output: bool = False,
@@ -611,7 +614,7 @@ class RawPanel:
         return msg
 
     def _set_color(
-        self, hwcid: int, index: int | None = None, rgb: dict | None = None
+        self, hwcid: int, *, index: int | None = None, rgb: dict | None = None
     ) -> dict:
         if rgb:
             color = {"ColorRGB": rgb}
@@ -625,6 +628,7 @@ class RawPanel:
     def _set_text(
         self,
         hwcid: int,
+        *,
         value1: int | None = None,
         title: str | None = None,
         solid_header: bool = False,
@@ -647,6 +651,7 @@ class RawPanel:
     def _set_audio_meter(
         self,
         hwcid: int,
+        *,
         meter_type: int = 1,
         mono: int = 0,
         title: str | None = None,
