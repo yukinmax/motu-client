@@ -217,7 +217,7 @@ class RawPanel:
         self._stopped = True
 
     def set_change_controller(self, controller: Any) -> None:
-        """Attach controller implementing on_change(data, *, source)."""
+        """Attach controller implementing on_change(data, *, source, origin=None)."""
         self._change_controller = controller
 
     def set_feedback_controller(self, controller: Any) -> None:

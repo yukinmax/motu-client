@@ -275,7 +275,7 @@ class _Store:
         )
 
     def set_change_controller(self, controller: Any) -> None:
-        """Attach controller implementing on_change(data, *, source)."""
+        """Attach controller implementing on_change(data, *, source, origin=None)."""
         self._change_controller = controller
 
 

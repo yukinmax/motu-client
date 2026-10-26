@@ -3,7 +3,7 @@
 Protocol shared by RawPanel and _Store:
 
   set_change_controller(controller)
-  controller.on_change(data, *, source: str)
+  controller.on_change(data, *, source: str, origin: str | None = None)
 
 Sources:
   "raw_panel"  — HWC event: data = {"hwcid": str, "value": str}
@@ -259,7 +259,9 @@ class MotuController:
     def set_datastore(self, datastore: motu.DataStore) -> None:
         self._ds = datastore
 
-    async def on_change(self, data: dict, *, source: str) -> None:
+    async def on_change(
+        self, data: dict, *, source: str, origin: str | None = None
+    ) -> None:
         if self._ds is None:
             logger.debug("MotuController: no datastore; ignore source=%s", source)
             return
