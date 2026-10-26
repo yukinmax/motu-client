@@ -29,6 +29,11 @@ logging.basicConfig(
     level=log_level,
     format="%(levelname)s [%(name)s] %(message)s",
 )
+# Hypercorn configures logging before the app is imported, so basicConfig
+# is a no-op. Set the levels directly.
+logging.getLogger().setLevel(log_level)
+logging.getLogger("hypercorn.error").setLevel(log_level)
+logging.getLogger("hypercorn.access").setLevel(log_level)
 
 logger = logging.getLogger(__name__)
 
