@@ -197,7 +197,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
@@ -208,7 +208,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
@@ -219,7 +219,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
@@ -230,7 +230,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
@@ -241,7 +241,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
@@ -252,7 +252,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
@@ -416,7 +416,7 @@ feedback_map = {
                 "state": (4, 0),
             },
             "color": {
-                "index": (8, 0),
+                "index": 8,
             },
         },
     },
