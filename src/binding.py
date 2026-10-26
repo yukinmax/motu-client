@@ -433,41 +433,32 @@ class PanelController:
             else:
                 dd[path] = v
         logger.debug("Init datastore feedback %s", dd)
-        await self._process_data_feedback(dd)
+        await self._process_data_feedback(dd, init=True)
         logger.debug("Init meters feedback %s", md)
         # Force the controller to send data to all audio meters
         self._last_peaks = None
         await self._process_meters_feedback(md)
 
     @staticmethod
-    def _pick_value_by_status(value: Any, active: bool) -> Any:
-        """Pair (on, off) or a single scalar."""
-        if isinstance(value, (tuple, list)) and len(value) == 2:
-            return value[0] if active else value[1]
-        return value
+    def _is_status_dependent(style: dict | None) -> bool:
+        """True when a field picks a value from the on/off state."""
+        if not style:
+            return False
+        return any(
+            isinstance(value, (tuple, list)) and len(value) == 2
+            for value in style.values()
+        )
 
-    def _apply_style(
-        self,
-        hwcid: int,
-        active: bool,
-        *,
-        mode: dict | None = None,
-        color: dict | None = None,
-    ) -> dict:
-        msg: dict = {}
-        if mode:
-            resolved = {
-                key: self._pick_value_by_status(val, active)
-                for key, val in mode.items()
-            }
-            msg.update(self._panel.hwc_mode(hwcid, **resolved))
-        if color:
-            resolved = {
-                key: self._pick_value_by_status(val, active)
-                for key, val in color.items()
-            }
-            msg.update(self._panel.hwc_color(hwcid, **resolved))
-        return msg
+    @staticmethod
+    def _resolve_style(style: dict, active: bool) -> dict:
+        """Resolve a mode or color dict. A pair is (on, off)."""
+        resolved = {}
+        for key, value in style.items():
+            if isinstance(value, (tuple, list)) and len(value) == 2:
+                resolved[key] = value[0] if active else value[1]
+            else:
+                resolved[key] = value
+        return resolved
 
     def _handle_button(
         self,
@@ -476,17 +467,26 @@ class PanelController:
         value: Any,
         raw_value: int | None,
         db_value: float | None,
+        init: bool = False,
     ) -> dict:
         if target.value is not None:
             active = value == target.value
         else:
             active = bool(value)
-        return self._apply_style(
-            target.hwcid,
-            active,
-            mode=target.mode,
-            color=target.color,
-        )
+        msg: dict = {}
+        if target.mode and (init or self._is_status_dependent(target.mode)):
+            msg.update(
+                self._panel.hwc_mode(
+                    target.hwcid, **self._resolve_style(target.mode, active)
+                )
+            )
+        if target.color and (init or self._is_status_dependent(target.color)):
+            msg.update(
+                self._panel.hwc_color(
+                    target.hwcid, **self._resolve_style(target.color, active)
+                )
+            )
+        return msg
 
     def _handle_fader(
         self,
@@ -495,13 +495,21 @@ class PanelController:
         value: Any,
         raw_value: int | None,
         db_value: float | None,
+        init: bool = False,
     ) -> dict:
-        msg = self._apply_style(
-            target.hwcid,
-            True,
-            mode=target.mode,
-            color=target.color,
-        )
+        msg: dict = {}
+        if target.mode and (init or self._is_status_dependent(target.mode)):
+            msg.update(
+                self._panel.hwc_mode(
+                    target.hwcid, **self._resolve_style(target.mode, True)
+                )
+            )
+        if target.color and (init or self._is_status_dependent(target.color)):
+            msg.update(
+                self._panel.hwc_color(
+                    target.hwcid, **self._resolve_style(target.color, True)
+                )
+            )
         if raw_value is not None:
             msg.update(self._panel.hwc_fader(target.hwcid, raw_value))
         return msg
@@ -513,6 +521,7 @@ class PanelController:
         value: Any,
         raw_value: int | None,
         db_value: float | None,
+        init: bool = False,
     ) -> dict:
         txt = target.text or {}
         return self._panel.hwc_text(
@@ -522,10 +531,10 @@ class PanelController:
         )
 
     async def _process_data_feedback(
-        self, d: dict, *, origin: str | None = None
+        self, d: dict, *, origin: str | None = None, init: bool = False
     ) -> None:
         # TODO: Consider waking the panel
-        # TODO: Only change fader style and display txt during feedback init
+        # TODO: Only change display text during feedback init
         messages = []
         for path, value in d.items():
             mapping = self._map.resolve(path)
@@ -555,6 +564,7 @@ class PanelController:
                     value=value,
                     raw_value=None if echo else raw_value,
                     db_value=db_value,
+                    init=init,
                 )
                 if msg:
                     messages.append(msg)
