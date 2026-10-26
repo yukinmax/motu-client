@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 if log_level_name not in _VALID_LOG_LEVELS:
     logger.warning("Invalid LOG_LEVEL=%r; falling back to INFO", log_level_name)
+elif log_level_name != "INFO":
+    logger.log(log_level, "Log level set to %s", log_level_name)
 
 app = Quart("MOTU API")
 app.config["BACKGROUND_TASK_SHUTDOWN_TIMEOUT"] = 5
