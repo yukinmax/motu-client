@@ -599,6 +599,7 @@ class RawPanel:
         blink_pattern: int | None = None,
         output: bool = False,
     ) -> dict:
+        """HWCMode message. A missing state is off."""
         payload = {}
         if state:
             payload["State"] = state
@@ -609,6 +610,7 @@ class RawPanel:
         return {"HWCIDs": [hwcid], "HWCMode": payload}
 
     def hwc_fader(self, hwcid: int, value: int | None) -> dict:
+        """Fader position message. A missing value is 0."""
         payload = {"Interpretation": 5}
         if value:
             payload["Value"] = value
@@ -695,6 +697,7 @@ class RawPanel:
         data2: int | None = None,
         peak2: int | None = None,
     ) -> dict:
+        """Audiometer message. A missing Data or Peak field is 0."""
         payload = {}
         if meter_type:
             payload["MeterType"] = meter_type

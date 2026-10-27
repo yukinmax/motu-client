@@ -33,6 +33,7 @@ def limit_to_range(value: float, minimum: float, maximum: float) -> float:
 
 
 def level_to_db(value: int | float) -> float:
+    """Linear gain to dB. 0 returns -inf."""
     value = float(value)
     if value == 0:
         return -math.inf
@@ -40,6 +41,7 @@ def level_to_db(value: int | float) -> float:
 
 
 def db_to_level(db_value: int | float) -> float:
+    """dB to linear gain. Clamps above 12 and below -120."""
     db_value = float(db_value)
     if db_value > 12:
         db_value = 12
@@ -49,6 +51,7 @@ def db_to_level(db_value: int | float) -> float:
 
 
 def dict_diff(d_old: dict, d_new: dict) -> dict:
+    """Keys from d_new that are new or different."""
     return {k: v for k, v in d_new.items() if k not in d_old or d_old[k] != v}
 
 
@@ -346,12 +349,14 @@ class Meters(_Store):
 
     @property
     def idle(self) -> bool:
+        """True when every peak is 0. False if peaks are not populated yet."""
         peaks = self.data.get("mix/level/peaks")
         if not peaks:
             return False  # not populated yet
         return not any(peaks)
 
     def _update_peaks(self) -> dict:
+        """Peak of each channel across the 15 sample slots."""
         filtered_data = {k: v for k, v in self.data.items() if not k.endswith("peaks")}
         if not filtered_data:
             return {}

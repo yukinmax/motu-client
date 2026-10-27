@@ -70,6 +70,7 @@ _METERS_DB_TO_RAW = _segments(METERS_RANGE_MAPPING, reverse=True)
 
 
 def _lerp(value: float, segments: tuple) -> float:
+    """Map value through segments. Clamps outside. Intervals are half-open."""
     first_lo, _, first_dst, _ = segments[0]
     _, last_hi, _, last_dst = segments[-1]
     if value <= first_lo:
@@ -142,6 +143,7 @@ class BindingConfig:
 
     @property
     def override_value(self) -> float | None:
+        """OVERRIDE_BASE + index, or None when the index is not set."""
         if self.override_index is None:
             return None
         return OVERRIDE_BASE + float(self.override_index)
@@ -300,6 +302,7 @@ class MotuController:
         await handler(cfg, value, hwcid)
 
     def _level_from_panel_value(self, cfg: BindingConfig, v: str) -> float | None:
+        """Panel raw to linear gain. Down toggles between the default and unity."""
         try:
             raw = int(v)
         except ValueError:
@@ -655,6 +658,7 @@ class PanelController:
         peaks: list | None,
         prev_peaks: list | None,
     ) -> bool:
+        """True when the channel level or peak differs. No previous value means changed."""
         if prev_levels is None or self._get_meter_sample(
             levels, ch
         ) != self._get_meter_sample(prev_levels, ch):
