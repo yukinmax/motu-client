@@ -290,20 +290,20 @@ class RawPanel:
         # handlers are started
         # TODO: Try await self.receive() for each expected response,
         # may not work with handle_requests() loop.
-        await self.send(self._get_panel_info())
-        await self.send(self._get_panel_map())
-        await self.send(self._get_panel_topology())
-        await self.send(self._get_sleep_timeout())
-        await self.send(self._set_sleep_timeout(self.sleep_timeout_ms))
-        await self.send(self._set_sleep_mode(self.sleep_mode))
-        await self.send(self._set_sleep_screen_saver(self.sleep_screen_saver))
+        await self.send(self.cmd_get_panel_info())
+        await self.send(self.cmd_get_panel_map())
+        await self.send(self.cmd_get_panel_topology())
+        await self.send(self.cmd_get_sleep_timeout())
+        await self.send(self.cmd_set_sleep_timeout(self.sleep_timeout_ms))
+        await self.send(self.cmd_set_sleep_mode(self.sleep_mode))
+        await self.send(self.cmd_set_sleep_screen_saver(self.sleep_screen_saver))
         await self.send(
-            self._set_panel_brightness(
+            self.cmd_set_panel_brightness(
                 leds=self.panel_brightness_leds,
                 oleds=self.panel_brightness_oleds,
             )
         )
-        await self.send(self._set_dimmed_gain(self.panel_dimmed_gain))
+        await self.send(self.cmd_set_dimmed_gain(self.panel_dimmed_gain))
         # Yield for other background tasks
         await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)
@@ -370,7 +370,8 @@ class RawPanel:
         """
         now = time.perf_counter()
         if force or (now - self._last_wakeup) > self._wakeup_min_interval:
-            await self.send(self._wakeup())
+            # TODO: Reset the panel sleep timeout if it is different from the property
+            await self.send(self.cmd_wakeup())
             self._last_wakeup = now
 
     async def handle_request(self, request: str) -> None:
@@ -527,27 +528,27 @@ class RawPanel:
         return record
 
     # TODO: Refactor message building logic
-    def _get_panel_info(self) -> list:
+    def cmd_get_panel_info(self) -> list:
         return [{"Command": {"SendPanelInfo": True}}]
 
-    def _get_panel_map(self) -> list:
+    def cmd_get_panel_map(self) -> list:
         return [{"Command": {"ReportHWCavailability": True}}]
 
-    def _get_panel_topology(self) -> list:
+    def cmd_get_panel_topology(self) -> list:
         return [{"Command": {"SendPanelTopology": True}}]
 
-    def _wakeup(self) -> list:
+    def cmd_wakeup(self) -> list:
         return [{"Command": {"WakeUp": True}}]
 
-    def _get_sleep_timeout(self) -> list:
+    def cmd_get_sleep_timeout(self) -> list:
         return [{"Command": {"GetSleepTimeout": True}}]
 
-    def _set_sleep_timeout(self, value: int | None = None) -> list:
+    def cmd_set_sleep_timeout(self, value: int | None = None) -> list:
         """Omit value to send {} and let the panel use its default."""
         payload = {} if value is None else {"Value": value}
         return [{"Command": {"SetSleepTimeout": payload}}]
 
-    def _set_sleep_mode(self, value: int | None = None) -> list:
+    def cmd_set_sleep_mode(self, value: int | None = None) -> list:
         """Omit value to send {} and let the panel use its default.
 
         0 = FireWorks - LEDs animate on the panel
@@ -556,7 +557,7 @@ class RawPanel:
         payload = {} if value is None else {"Mode": value}
         return [{"Command": {"SetSleepMode": payload}}]
 
-    def _set_sleep_screen_saver(self, value: int | None = None) -> list:
+    def cmd_set_sleep_screen_saver(self, value: int | None = None) -> list:
         """Omit value to send {} and let the panel use its default.
 
         0 = "Wake Up On Key Press"
@@ -567,7 +568,7 @@ class RawPanel:
         payload = {} if value is None else {"Type": value}
         return [{"Command": {"SetSleepScreenSaver": payload}}]
 
-    def _set_dimmed_gain(self, value: int | None = None) -> list:
+    def cmd_set_dimmed_gain(self, value: int | None = None) -> list:
         """Omit value to send {} and let the panel use its default.
 
         Gain is 0 or 1-64. Full gain is 64, a good dimmed value is 4-16.
@@ -576,7 +577,7 @@ class RawPanel:
         payload = {} if value is None else {"Value": value}
         return [{"Command": {"SetDimmedGain": payload}}]
 
-    def _set_panel_brightness(
+    def cmd_set_panel_brightness(
         self, *, leds: int | None = None, oleds: int | None = None
     ) -> list:
         """LED and OLED brightness, range 0-8.
