@@ -167,7 +167,7 @@ async def mix_send_level_get() -> str:
     except KeyError:
         return json.dumps({"status": "FAILURE"})
     try:
-        fmt = request.args.get("format")
+        fmt = request.args["format"]
     except KeyError:
         pass
     else:
