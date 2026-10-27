@@ -545,7 +545,7 @@ class RawPanel:
 
     def cmd_set_sleep_timeout(self, value: int | None = None) -> list:
         """Omit value to send {} and let the panel use its default."""
-        payload = {} if value is None else {"Value": value}
+        payload = {} if not value else {"Value": value}
         return [{"Command": {"SetSleepTimeout": payload}}]
 
     def cmd_set_sleep_mode(self, value: int | None = None) -> list:
@@ -554,7 +554,7 @@ class RawPanel:
         0 = FireWorks - LEDs animate on the panel
         1 = Buttons Off
         """
-        payload = {} if value is None else {"Mode": value}
+        payload = {} if not value else {"Mode": value}
         return [{"Command": {"SetSleepMode": payload}}]
 
     def cmd_set_sleep_screen_saver(self, value: int | None = None) -> list:
@@ -565,7 +565,7 @@ class RawPanel:
         2 = "Save The Oleds"
         3 = Just Dimmed - keeps content, dims the panel
         """
-        payload = {} if value is None else {"Type": value}
+        payload = {} if not value else {"Type": value}
         return [{"Command": {"SetSleepScreenSaver": payload}}]
 
     def cmd_set_dimmed_gain(self, value: int | None = None) -> list:
@@ -574,7 +574,7 @@ class RawPanel:
         Gain is 0 or 1-64. Full gain is 64, a good dimmed value is 4-16.
         0 resets to the panel defaults (10-16).
         """
-        payload = {} if value is None else {"Value": value}
+        payload = {} if not value else {"Value": value}
         return [{"Command": {"SetDimmedGain": payload}}]
 
     def cmd_set_panel_brightness(
@@ -585,9 +585,9 @@ class RawPanel:
         A missing field is set to 0 by the panel. {} sets both to 0.
         """
         payload = {}
-        if leds is not None:
+        if leds:
             payload["LEDs"] = leds
-        if oleds is not None:
+        if oleds:
             payload["OLEDs"] = oleds
         return [{"Command": {"PanelBrightness": payload}}]
 
@@ -599,84 +599,118 @@ class RawPanel:
         blink_pattern: int | None = None,
         output: bool = False,
     ) -> dict:
-        msg = {"HWCIDs": [hwcid], "HWCMode": {}}
+        payload = {}
         if state:
-            msg["HWCMode"]["State"] = state
+            payload["State"] = state
         if blink_pattern:
-            msg["HWCMode"]["BlinkPattern"] = blink_pattern
+            payload["BlinkPattern"] = blink_pattern
         if output:
-            msg["HWCMode"]["Output"] = True
-        return msg
+            payload["Output"] = True
+        return {"HWCIDs": [hwcid], "HWCMode": payload}
 
     def hwc_fader(self, hwcid: int, value: int | None) -> dict:
-        msg = {"HWCIDs": [hwcid], "HWCExtended": {"Interpretation": 5}}
+        payload = {"Interpretation": 5}
         if value:
-            msg["HWCExtended"]["Value"] = value
-        return msg
+            payload["Value"] = value
+        return {"HWCIDs": [hwcid], "HWCExtended": payload}
 
     def hwc_color(
-        self, hwcid: int, *, index: int | None = None, rgb: dict | None = None
+        self,
+        hwcid: int,
+        *,
+        index: int | None = None,
+        red: dict | None = None,
+        green: dict | None = None,
+        blue: dict | None = None,
     ) -> dict:
+        payload = {}
+        rgb = {}
+        if red:
+            rgb["Red"] = red
+        if green:
+            rgb["Green"] = green
+        if blue:
+            rgb["Blue"] = blue
         if rgb:
-            color = {"ColorRGB": rgb}
+            payload["ColorRGB"] = rgb
         elif index:
-            color = {"ColorIndex": {"Index": index}}
-        else:
-            color = {"ColorIndex": {}}
-        msg = {"HWCIDs": [hwcid], "HWCColor": color}
-        return msg
+            payload["ColorIndex"] = {"Index": index}
+        return {"HWCIDs": [hwcid], "HWCColor": payload}
 
     def hwc_text(
         self,
         hwcid: int,
         *,
         value1: int | None = None,
+        value2: int | None = None,
         title: str | None = None,
-        solid_header: bool = False,
+        solid_header: bool | None = None,
         text1: str | None = None,
-        formatting: int = 7,
+        text2: str | None = None,
+        formatting: int | None = None,  # Formatting for value1/value2
+        state_icon: int | None = None,
+        modifier_icon: int | None = None,
+        pair_mode: int | None = None,
+        inverted: bool | None = None,
+        # TODO: Add scale-related properties (type/range/limit)
+        # TODO: Add text_scroll properties if panel supports it (RawPanelSupport)
+        # TODO: Add text_styling properties (font/padding, etc.)
     ) -> dict:
-        msg = {"HWCIDs": [hwcid], "HWCText": {}}
+        payload = {}
         if value1:
-            msg["HWCText"]["IntegerValue"] = value1
+            payload["IntegerValue"] = value1
+        if value2:
+            payload["IntegerValue2"] = value2
         if title:
-            msg["HWCText"]["Title"] = title
+            payload["Title"] = title
         if solid_header:
-            msg["HWCText"]["SolidHeaderBar"] = True
-        if text1 is not None:
-            msg["HWCText"]["TextLine1"] = str(text1)
+            payload["SolidHeaderBar"] = True
+        if text1:
+            payload["TextLine1"] = text1
+        if text2:
+            payload["TextLine1"] = text2
         if formatting:
-            msg["HWCText"]["Formatting"] = formatting
-        return msg
+            payload["Formatting"] = formatting
+        if state_icon:
+            payload["StateIcon"] = state_icon
+        if modifier_icon:
+            payload["ModifierIcon"] = modifier_icon
+        if pair_mode:
+            payload["PairMode"] = pair_mode
+        if inverted:
+            payload["Inverted"] = True
+        return {"HWCIDs": [hwcid], "HWCText": payload}
 
     def hwc_meter(
         self,
         hwcid: int,
         *,
-        meter_type: int = 1,
-        mono: int = 0,
+        meter_type: int | None = None,
+        mono: bool | None = None,
         title: str | None = None,
-        w: int = 176,
-        h: int = 32,
+        w: int = 176,  # TODO: Grab from the panel topology
+        h: int = 32,  # TODO: Grab from the panel topology
         data1: int | None = None,
         peak1: int | None = None,
         data2: int | None = None,
         peak2: int | None = None,
     ) -> dict:
-        msg = {
-            "HWCIDs": [hwcid],
-            "Processors": {"Audiometer": {"MeterType": meter_type, "W": w, "H": h}},
-        }
+        payload = {}
+        if meter_type:
+            payload["MeterType"] = meter_type
         if mono:
-            msg["Processors"]["Audiometer"]["Mono"] = mono
+            payload["Mono"] = True
         if title:
-            msg["Processors"]["Audiometer"]["Title"] = title
+            payload["Title"] = title
         if data1:
-            msg["Processors"]["Audiometer"]["Data1"] = data1
+            payload["Data1"] = data1
         if peak1:
-            msg["Processors"]["Audiometer"]["Peak1"] = peak1
+            payload["Peak1"] = peak1
         if data2:
-            msg["Processors"]["Audiometer"]["Data2"] = data2
+            payload["Data2"] = data2
         if peak2:
-            msg["Processors"]["Audiometer"]["Peak2"] = peak2
-        return msg
+            payload["Peak2"] = peak2
+        if payload:
+            payload["W"] = w
+            payload["H"] = h
+        return {"HWCIDs": [hwcid], "Processors": {"Audiometer": payload}}
