@@ -307,22 +307,34 @@ class MotuController:
         level = self._level_from_panel_value(cfg, v)
         if level is None:
             return
-        await self._ds.set(cfg.path, level, origin=str(hwcid))
+        result = await self._ds.set(cfg.path, level, origin=str(hwcid))
+        if result is None:
+            logger.warning("Unable to set path %s to %s", cfg.path, level)
 
     async def _handle_mute(self, cfg: BindingConfig, v: str, hwcid: str | int) -> None:
         if v != "Down":
             return
-        await self._ds.toggle(cfg.path)
+        result = await self._ds.toggle(cfg.path)
+        if result is None:
+            logger.warning("Unable to toggle path %s", cfg.path)
 
     async def _handle_solo(self, cfg: BindingConfig, v: str, hwcid: str | int) -> None:
         if v != "Down":
             return
         override = self._ds.get(OVERRIDE_PATH)
         if override is not None and override != OVERRIDE_DISABLED:
-            await self._ds.set(cfg.path, 1.0)
+            result = await self._ds.set(cfg.path, 1.0)
+            if result is None:
+                logger.warning("Unable to set path %s to %s", cfg.path, 1.0)
         else:
-            await self._ds.toggle(cfg.path)
-        await self._ds.set(OVERRIDE_PATH, OVERRIDE_DISABLED)
+            result = await self._ds.toggle(cfg.path)
+            if result is None:
+                logger.warning("Unable to toggle path %s", cfg.path)
+        result = await self._ds.set(OVERRIDE_PATH, OVERRIDE_DISABLED)
+        if result is None:
+            logger.warning(
+                "Unable to set path %s to %s", OVERRIDE_PATH, OVERRIDE_DISABLED
+            )
 
     async def _handle_override(
         self, cfg: BindingConfig, v: str, hwcid: str | int
@@ -337,9 +349,12 @@ class MotuController:
             logger.warning("Path %s is not available", cfg.path)
             return
         if current == cfg.override_value:
-            await self._ds.set(cfg.path, OVERRIDE_DISABLED)
+            value = OVERRIDE_DISABLED
         else:
-            await self._ds.set(cfg.path, cfg.override_value)
+            value = cfg.override_value
+        result = await self._ds.set(cfg.path, value)
+        if result is None:
+            logger.warning("Unable to set path %s to %s", cfg.path, value)
 
 
 class PanelController:
