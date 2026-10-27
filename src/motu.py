@@ -294,7 +294,7 @@ class DataStore(_Store):
 
     async def set(
         self, path: str, value: Any, *, origin: str | None = None
-    ) -> _HttpResult | None:
+    ) -> Any | None:
         data = f"json={json.dumps({path: value})}".encode()
         response = await self.http.request(
             self._url(),
@@ -304,15 +304,18 @@ class DataStore(_Store):
             retries=DEFAULT_MUTATE_RETRIES,
             timeout=DEFAULT_MUTATE_TIMEOUT_SEC,
         )
-        if response is not None:
-            data_diff = {path: value}
-            self.data.update(data_diff)
-            logger.debug("Modified: %s -> %s", self.base_path, data_diff)
-            if self._change_controller:
-                await self._change_controller.on_change(
-                    {path: value}, source=self.base_path, origin=origin
-                )
-        return response
+        # 204 has no body, so the sent value is the result. 200 is accepted
+        # the same way: request() only returns for 200/204.
+        if response is None or response.status_code not in (200, 204):
+            return None
+        data_diff = {path: value}
+        self.data.update(data_diff)
+        logger.debug("Modified: %s -> %s", self.base_path, data_diff)
+        if self._change_controller:
+            await self._change_controller.on_change(
+                data_diff, source=self.base_path, origin=origin
+            )
+        return value
 
     async def toggle(self, path: str) -> float | None:
         try:
@@ -320,12 +323,7 @@ class DataStore(_Store):
         except KeyError:
             logger.error("Cannot toggle missing path %s", path)
             return None
-        value = float(not current)
-        response = await self.set(path, value)
-        if response is not None and response.status_code == 204:
-            return value
-        logger.error("Failed to toggle %s", path)
-        return None
+        return await self.set(path, float(not current))
 
 
 class Meters(_Store):
