@@ -36,7 +36,7 @@ def level_to_db(value: int | float) -> float:
     value = float(value)
     if value == 0:
         return -math.inf
-    return round(20 * math.log10(value), 2)
+    return 20 * math.log10(value)
 
 
 def db_to_level(db_value: int | float) -> float:
