@@ -118,43 +118,56 @@ async def panel_command() -> str:
 
 @app.route("/api/v1/motu/mute-toggle", methods=["GET"])
 async def mute_toggle() -> str:
-    if "bus" not in request.args:
+    try:
+        bus = str(request.args["bus"])
+    except KeyError:
         return "Error: No bus field provided. Please specify bus."
-    if "index" not in request.args:
+    try:
+        channel = int(request.args["index"])
+    except KeyError:
         return "Error: No index field provided. Please specify index."
-    bus = str(request.args["bus"])
-    channel = int(request.args["index"])
     path = f"mix/{bus}/{channel}/matrix/mute"
-    value = await motu_ds.toggle(path)
-    if value is None:
+    result = await motu_ds.toggle(path)
+    if result is None:
         return json.dumps({"status": "FAILURE"})
-    return json.dumps({"status": str(value)})
+    return json.dumps({"status": str(result)})
 
 
 @app.route("/api/v1/motu/mute-status", methods=["GET"])
 async def mute_status() -> str:
-    if "bus" not in request.args:
+    try:
+        bus = str(request.args["bus"])
+    except KeyError:
         return "Error: No bus field provided. Please specify bus."
-    if "index" not in request.args:
+    try:
+        channel = int(request.args["index"])
+    except KeyError:
         return "Error: No index field provided. Please specify index."
-    bus = str(request.args["bus"])
-    channel = int(request.args["index"])
     path = f"mix/{bus}/{channel}/matrix/mute"
-    return json.dumps({"status": str(motu_ds.get(path))})
+    try:
+        result = motu_ds.get(path)
+    except KeyError:
+        return json.dumps({"status": "FAILURE"})
+    return json.dumps({"status": str(result)})
 
 
 @app.route("/api/v1/motu/aux-send-level", methods=["GET"])
 async def mix_send_level_get() -> str:
-    if "chan" not in request.args:
-        return "Error: No channel field provided. Please specify channel #."
-    if "aux" not in request.args:
-        return "Error: No aux field provided. Please specify aux #."
-    channel = int(request.args["chan"])
-    aux = int(request.args["aux"])
-    path = f"mix/chan/{channel}/matrix/aux/{aux}/send"
-    result = motu_ds.get(path)
     try:
-        fmt = request.args["format"]
+        channel = int(request.args["chan"])
+    except KeyError:
+        return "Error: No chan field provided. Please specify channel #."
+    try:
+        aux = int(request.args["aux"])
+    except KeyError:
+        return "Error: No aux field provided. Please specify aux #."
+    path = f"mix/chan/{channel}/matrix/aux/{aux}/send"
+    try:
+        result = motu_ds.get(path)
+    except KeyError:
+        return json.dumps({"status": "FAILURE"})
+    try:
+        fmt = request.args.get("format")
     except KeyError:
         pass
     else:
@@ -167,15 +180,18 @@ async def mix_send_level_get() -> str:
 
 @app.route("/api/v1/motu/aux-send-level", methods=["POST", "PATCH"])
 async def mix_send_level_set() -> str:
-    if "chan" not in request.args:
-        return "Error: No channel field provided. Please specify channel #."
-    if "aux" not in request.args:
+    try:
+        channel = int(request.args["chan"])
+    except KeyError:
+        return "Error: No chan field provided. Please specify channel #."
+    try:
+        aux = int(request.args["aux"])
+    except KeyError:
         return "Error: No aux field provided. Please specify aux #."
-    if "value" not in request.args:
+    try:
+        value = float(request.args["value"])
+    except KeyError:
         return "Error: No value field provided. Please specify new value."
-    channel = int(request.args["chan"])
-    aux = int(request.args["aux"])
-    value = float(request.args["value"])
     try:
         fmt = request.args["format"]
     except KeyError:
@@ -190,8 +206,9 @@ async def mix_send_level_set() -> str:
         if fmt in ("db", "raw"):
             value = motu.db_to_level(value)
     path = f"mix/chan/{channel}/matrix/aux/{aux}/send"
-    await motu_ds.set(path, value)
-    result = motu_ds.get(path)
+    result = await motu_ds.set(path, value)
+    if result is None:
+        return json.dumps({"status": "FAILURE"})
     return json.dumps({"status": f"{result:.10f}"})
 
 
