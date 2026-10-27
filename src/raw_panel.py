@@ -1,551 +1,58 @@
-import asyncio
-import json
-import math
-import re
-import logging
-import motu
-import time
-import os.path
+from __future__ import annotations
 
+import asyncio
+import inspect
+import json
+import logging
+import socket
+import time
+from typing import Any
+
+from binding import SOURCE_RAW_PANEL
 
 logger = logging.getLogger(__name__)
 
-tmp_mapping = {
-    '13': {
-        'path': 'mix/chan/0/matrix/aux/0/send',
-    },
-    '14': {
-        'path': 'mix/chan/2/matrix/aux/0/send',
-    },
-    '15': {
-        'path': 'mix/chan/4/matrix/aux/0/send',
-    },
-    '16': {
-        'path': 'mix/chan/6/matrix/aux/0/send',
-    },
-    '17': {
-        'path': 'mix/chan/8/matrix/aux/0/send',
-    },
-    '18': {
-        'path': 'mix/group/0/matrix/main/0/send',
-    },
-    '19': {
-        'path': 'mix/aux/0/matrix/fader',
-    },
-    '20': {
-        'path': 'mix/main/0/matrix/fader',
-    },
-    '61.4': {
-        'path': 'mix/chan/0/matrix/mute',
-    },
-    '64.4': {
-        'path': 'mix/chan/2/matrix/mute',
-    },
-    '67.4': {
-        'path': 'mix/chan/4/matrix/mute',
-    },
-    '70.4': {
-        'path': 'mix/chan/6/matrix/mute',
-    },
-    '73.4': {
-        'path': 'mix/chan/8/matrix/mute',
-    },
-    '76.4': {
-        'path': 'mix/group/0/matrix/mute',
-    },
-    '79.4': {
-        'path': 'mix/aux/0/matrix/mute',
-    },
-    '82.4': {
-        'path': 'mix/main/0/matrix/mute',
-    },
-    '62.1': {
-        'path': 'mix/chan/0/matrix/solo',
-    },
-    '65.1': {
-        'path': 'mix/chan/2/matrix/solo',
-    },
-    '68.1': {
-        'path': 'mix/chan/4/matrix/solo',
-    },
-    '71.1': {
-        'path': 'mix/chan/6/matrix/solo',
-    },
-    '74.1': {
-        'path': 'mix/chan/8/matrix/solo',
-    },
-    '77.1': {
-        'path': 'mix/group/0/matrix/solo',
-    },
-    '80.1': {
-        'path': 'mix/monitor/0/override/0',
-    },
-    '63.4': {
-        'path': 'mix/chan/0/matrix/aux/0/send',
-        'default_level': -5.0,
-    },
-    '66.4': {
-        'path': 'mix/chan/2/matrix/aux/0/send',
-        'default_level': -10.0,
-    },
-    '69.4': {
-        'path': 'mix/chan/4/matrix/aux/0/send',
-        'default_level': -20.0,
-    },
-    '72.4': {
-        'path': 'mix/chan/6/matrix/aux/0/send',
-    },
-    '75.4': {
-        'path': 'mix/chan/8/matrix/aux/0/send',
-    },
-    '78.4': {
-        'path': 'mix/group/0/matrix/main/0/send',
-    },
-    '81.4': {
-        'path': 'mix/aux/0/matrix/fader',
-    },
-    '84.4': {
-        'path': 'mix/main/0/matrix/fader',
-    },
-}
 
-feedback_map = {
-    'mix/chan/0/matrix/mute': {
-        'button': {
-            'hwcid': 61,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/chan/2/matrix/mute': {
-        'button': {
-            'hwcid': 64,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/chan/4/matrix/mute': {
-        'button': {
-            'hwcid': 67,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/chan/6/matrix/mute': {
-        'button': {
-            'hwcid': 70,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/chan/8/matrix/mute': {
-        'button': {
-            'hwcid': 73,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/group/0/matrix/mute': {
-        'button': {
-            'hwcid': 76,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/aux/0/matrix/mute': {
-        'button': {
-            'hwcid': 79,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/main/0/matrix/mute': {
-        'button': {
-            'hwcid': 82,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': (4, 15)
-            }
-        }
-    },
-    'mix/chan/0/matrix/solo': {
-        'button': {
-            'hwcid': 62,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/chan/2/matrix/solo': {
-        'button': {
-            'hwcid': 65,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/chan/4/matrix/solo': {
-        'button': {
-            'hwcid': 68,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/chan/6/matrix/solo': {
-        'button': {
-            'hwcid': 71,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/chan/8/matrix/solo': {
-        'button': {
-            'hwcid': 74,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/group/0/matrix/solo': {
-        'button': {
-            'hwcid': 77,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/chan/0/matrix/aux/0/send': {
-        'fader': {
-            'hwcid': 13,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 13
-            }
-        },
-        'display': {
-            'hwcid': 29,
-            'text': {
-                'formatting': 7,
-                'title': 'Mic',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/chan/2/matrix/aux/0/send': {
-        'fader': {
-            'hwcid': 14,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 13
-            }
-        },
-        'display': {
-            'hwcid': 30,
-            'text': {
-                'formatting': 7,
-                'title': 'PC',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/chan/4/matrix/aux/0/send': {
-        'fader': {
-            'hwcid': 15,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 13
-            }
-        },
-        'display': {
-            'hwcid': 31,
-            'text': {
-                'formatting': 7,
-                'title': 'Music',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/chan/6/matrix/aux/0/send': {
-        'fader': {
-            'hwcid': 16,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 13
-            }
-        },
-        'display': {
-            'hwcid': 32,
-            'text': {
-                'formatting': 7,
-                'title': 'Comm',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/chan/8/matrix/aux/0/send': {
-        'fader': {
-            'hwcid': 17,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 13
-            }
-        },
-        'display': {
-            'hwcid': 33,
-            'text': {
-                'formatting': 7,
-                'title': 'Anlg',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/group/0/matrix/main/0/send': {
-        'fader': {
-            'hwcid': 18,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 7
-            }
-        },
-        'display': {
-            'hwcid': 34,
-            'text': {
-                'formatting': 7,
-                'title': 'VOD',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/aux/0/matrix/fader': {
-        'fader': {
-            'hwcid': 19,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 11
-            }
-        },
-        'display': {
-            'hwcid': 35,
-            'text': {
-                'formatting': 7,
-                'title': 'MyMix',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/main/0/matrix/fader': {
-        'fader': {
-            'hwcid': 20,
-            'mode': {
-                'state': 4
-            },
-            'color': {
-                'index': 11
-            }
-        },
-        'display': {
-            'hwcid': 36,
-            'text': {
-                'formatting': 7,
-                'title': 'Main',
-                'solid_header': True
-            }
-        }
-    },
-    'mix/monitor/0/override': {
-        'button1': {
-            'hwcid': 80,
-            'value': 1024,
-            'mode': {
-                'state': (4, 0)
-            },
-            'color': {
-                'index': (8, 0)
-            }
-        }
-    },
-    'mix/level': {
-        'display1': {
-            'hwcid': 37,
-            'channels': [0],
-            'pre_fader': False,
-            'fader_path': 'mix/chan/0/matrix/aux/0/send',
-            'mute_path': 'mix/chan/0/matrix/mute',
-            'audio_meter': {
-                'mono': True,
-                'meter_type': 1,
-            }
-        },
-        'display2': {
-            'hwcid': 38,
-            'channels': [2, 3],
-            'pre_fader': False,
-            'fader_path': 'mix/chan/2/matrix/aux/0/send',
-            'mute_path': 'mix/chan/2/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        },
-        'display3': {
-            'hwcid': 39,
-            'channels': [4, 5],
-            'pre_fader': False,
-            'fader_path': 'mix/chan/4/matrix/aux/0/send',
-            'mute_path': 'mix/chan/4/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        },
-        'display4': {
-            'hwcid': 40,
-            'channels': [6, 7],
-            'pre_fader': False,
-            'fader_path': 'mix/chan/6/matrix/aux/0/send',
-            'mute_path': 'mix/chan/6/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        },
-        'display5': {
-            'hwcid': 41,
-            'channels': [8, 9],
-            'pre_fader': False,
-            'fader_path': 'mix/chan/8/matrix/aux/0/send',
-            'mute_path': 'mix/chan/8/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        },
-        'display6': {
-            'hwcid': 42,
-            'channels': [34, 35],
-            'pre_fader': False,
-            'fader_path': 'mix/group/0/matrix/main/0/send',
-            'mute_path': 'mix/group/0/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        },
-        'display7': {
-            'hwcid': 43,
-            'channels': [40, 41],
-            'pre_fader': False,
-            'fader_path': 'mix/aux/0/matrix/fader',
-            'mute_path': 'mix/aux/0/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        },
-        'display8': {
-            'hwcid': 44,
-            'channels': [38, 39],
-            'pre_fader': False,
-            'fader_path': 'mix/main/0/matrix/fader',
-            'mute_path': 'mix/main/0/matrix/mute',
-            'audio_meter': {
-                'mono': False,
-                'meter_type': 1,
-            }
-        }
-    }
-}
-
-raw_db_range_mapping = (
-    (0, -math.inf),
-    ((1, 5), (-120, -60)),
-    ((5, 125), (-60, -30)),
-    ((125, 1000), (-30, 12))
-)
-raw_db_range_mapping_meters = (
-    (0, -math.inf),
-    ((1, 1000), (-60, 12)),
-)
+def normalize_hwc_value(value: str) -> str:
+    """Panel protocol: strip optional prefix ('State:Down' → 'Down')."""
+    try:
+        _prefix, v = value.split(":", 1)
+        return v
+    except ValueError:
+        return value
 
 
-class RawPanel():
-    def __init__(self, host, port=9923, mode='ASCII', delay=0.01,
-                 sleep_timeout=0):
+class RawPanel:
+    def __init__(
+        self,
+        host: str,
+        *,
+        port: int = 9923,
+        mode: str = "ASCII",
+        delay: float = 0.01,
+        idle_sleep: float = 0.1,
+        sleep_timeout_minutes: int = 0,
+        sleep_mode: int = 0,
+        sleep_screen_saver: int = 0,
+        panel_brightness_leds: int = 4,
+        panel_brightness_oleds: int = 2,
+        panel_dimmed_gain: int = 20,
+    ) -> None:
         self.mode = mode
         self.host = str(host)
         self.port = int(port)
         self.connected = False
-        self.connection_in_progress = False
-        self.disconnect_in_progress = False
-        self.reader = None
-        self.writer = None
-        self.sys_stat = None
+        self._connection_in_progress = False
+        self._disconnect_in_progress = False
+        self._stopped = False
+        self._reader = None
+        self._writer = None
+        self._sys_stat = None
         self.delay = delay
-        self.sleep_timeout = sleep_timeout
+        self.idle_sleep = idle_sleep
+        self.sleep_timeout_ms = sleep_timeout_minutes * 60000
+        self.sleep_mode = sleep_mode
+        self.sleep_screen_saver = sleep_screen_saver
         self.info = {
             "model": None,
             "serial": None,
@@ -557,60 +64,70 @@ class RawPanel():
             "support": None,
             "isSleeping": None,
             "panel_sleep_timeout": None,
-            "EnvironmenalHealth": None,
+            "EnvironmentalHealth": None,
+            "DimmedGain": None,
         }
-        self.panel_map = {}
-        self.commands = {
+        self._panel_map = {}
+        self._panel_topology = {"svgbase": None, "HWC": None}
+        self.panel_brightness_leds = panel_brightness_leds
+        self.panel_brightness_oleds = panel_brightness_oleds
+        self.panel_dimmed_gain = panel_dimmed_gain
+        self._commands = {
             "SysStat": self._update_sys_stat,
             "_model": self._update_model,
             "_serial": self._update_serial,
             "_version": self._update_version,
             "_name": self._update_name,
             "_platform": self._update_platform,
-            "_bluePillReady": self._update_bluePillReady,
-            "_panelType": self._update_panelType,
+            "_bluePillReady": self._update_blue_pill_ready,
+            "_panelType": self._update_panel_type,
             "_support": self._update_support,
-            "_isSleeping": self._update_isSleeping,
+            "_isSleeping": self._update_is_sleeping,
             "_sleepTimer": self._update_panel_sleep_timeout,
-            "EnvironmentalHealth": self._update_EnvironmentalHealth,
+            "_panelTopology_svgbase": self._update_panel_topology_svgbase,
+            "_panelTopology_HWC": self._update_panel_topology_hwc,
+            "EnvironmentalHealth": self._update_environmental_health,
+            "DimmedGain": self._update_dimmed_gain,
             "map": self._update_map,
-            "HWC": self._hardware_change_schedule
+            "HWC": self._hardware_change_schedule,
         }
-        self.hw_change_buffer = {}
-        self.ds = None
-        self.ms = None
-        self.last_activity = time.perf_counter()
+        self._hw_change_buffer = {}
+        self.last_activity = 0.0
+        self._last_wakeup = 0.0
+        self._wakeup_min_interval = 10.0  # seconds
+        self._change_controller = None
+        self._feedback_controller = None
 
-    async def _update_sys_stat(self, value):
-        self.sys_stat = value
+    def _update_sys_stat(self, value: str) -> None:
+        self._sys_stat = value
         logger.debug("Updated System Stats")
 
-    async def _update_model(self, value):
-        self.info['model'] = value
+    def _update_model(self, value: str) -> None:
+        self.info["model"] = value
 
-    async def _update_serial(self, value):
-        self.info['serial'] = value
+    def _update_serial(self, value: str) -> None:
+        self.info["serial"] = value
 
-    async def _update_version(self, value):
-        self.info['version'] = value
+    def _update_version(self, value: str) -> None:
+        self.info["version"] = value
 
-    async def _update_name(self, value):
-        self.info['name'] = value
+    def _update_name(self, value: str) -> None:
+        self.info["name"] = value
 
-    async def _update_platform(self, value):
-        self.info['platform'] = value
+    def _update_platform(self, value: str) -> None:
+        self.info["platform"] = value
 
-    async def _update_bluePillReady(self, value):
-        self.info['bluePillReady'] = value
+    def _update_blue_pill_ready(self, value: str) -> None:
+        self.info["bluePillReady"] = value
 
-    async def _update_panelType(self, value):
-        self.info['panelType'] = value
+    def _update_panel_type(self, value: str) -> None:
+        self.info["panelType"] = value
 
-    async def _update_support(self, value):
-        self.info['support'] = value
+    def _update_support(self, value: str) -> None:
+        self.info["support"] = value
 
-    async def _update_isSleeping(self, value):
-        prev_state = self.info['isSleeping']
+    async def _update_is_sleeping(self, value: str) -> None:
+        prev_state = self.info["isSleeping"]
         new_state = bool(int(value))
         if new_state == prev_state:
             return
@@ -619,15 +136,15 @@ class RawPanel():
         else:
             sleep_state_str = f"{new_state}"
         logger.info("Sleeping: %s", sleep_state_str)
-        self.info['isSleeping'] = new_state
+        self.info["isSleeping"] = new_state
         if not new_state and (prev_state or prev_state is None):
-            # Init the panel feedback only after panels wakes up
-            # or initializes
-            await asyncio.sleep(0.5)
-            await self.init_feedback()
+            # Init feedback only after panel wakes up or initializes
+            await asyncio.sleep(1.0)
+            if self._feedback_controller is not None:
+                await self._feedback_controller.init_feedback()
 
-    async def _update_panel_sleep_timeout(self, value):
-        prev_state = self.info['panel_sleep_timeout']
+    def _update_panel_sleep_timeout(self, value: str) -> None:
+        prev_state = self.info["panel_sleep_timeout"]
         new_state = int(value)
         if new_state == prev_state:
             return
@@ -636,586 +153,567 @@ class RawPanel():
         else:
             sleep_timer_str = f"{new_state}"
         logger.info("Internal Panel Sleep Timer: %s", sleep_timer_str)
-        self.info['panel_sleep_timeout'] = new_state
+        self.info["panel_sleep_timeout"] = new_state
 
-    async def _update_EnvironmentalHealth(self, value):
-        self.info['EnvironmentalHealth'] = value
+    def _update_environmental_health(self, value: str) -> None:
+        self.info["EnvironmentalHealth"] = value
 
-    async def _update_map(self, value):
+    def _update_dimmed_gain(self, value: str) -> None:
+        self.info["DimmedGain"] = value
+
+    def _update_map(self, value: str) -> None:
         k, v = value.split(":")
-        self.panel_map[k] = v
+        self._panel_map[k] = v
 
-    async def _hardware_change_schedule(self, hwcid, value):
+    def _update_panel_topology_svgbase(self, value: str) -> None:
+        self._panel_topology["svgbase"] = value
+
+    def _update_panel_topology_hwc(self, value: str) -> None:
+        self._panel_topology["HWC"] = json.loads(value)
+
+    def _hardware_change_schedule(self, hwcid: str, value: str) -> None:
         t = time.perf_counter()
         self.last_activity = t
-        change = self.hw_change_buffer.setdefault(hwcid, {'time': t,
-                                                          'value': None})
-        change['value'] = value
+        change = self._hw_change_buffer.setdefault(hwcid, {"time": t, "value": None})
+        change["value"] = value
 
-    async def _hardware_change_process(self, hwcid, value):
-        await self.reset_panel_sleep()
+    async def _hardware_change_process(self, hwcid: str, value: str) -> None:
+        await self.wakeup()
+        if self._change_controller is None:
+            logger.debug("No change controller; ignore hwcid %s", hwcid)
+            return
+        normalized = normalize_hwc_value(value)
+        await self._change_controller.on_change(
+            {"hwcid": str(hwcid), "value": normalized},
+            source=SOURCE_RAW_PANEL,
+        )
+
+    def _configure_socket(self, writer: asyncio.StreamWriter) -> None:
+        """Keepalive for dead-peer detection;
+        TCP_NODELAY for low-latency meters."""
+        sock = writer.get_extra_info("socket")
+        if sock is None:
+            return
         try:
-            path = tmp_mapping[hwcid]['path']
-        except KeyError:
-            logger.debug("hwcid %s is not mapped", hwcid)
-            return
-        path_match = re.search(r"(\w+)\/?(\d*)$", path)
-        path_type = path_match.group(1)
-        try:
-            s, v = value.split(':')
-        except ValueError:
-            v = value
-        logger.debug("hwcid %s is set to %s", hwcid, v)
-        if path_type in ('send', 'fader'):
-            try:
-                v = int(v)
-            except ValueError:
-                if re.match(r"Down", v):
-                    v = self.ds.get(path)
-                    try:
-                        dv = tmp_mapping[hwcid]['default_level']
-                    except KeyError:
-                        logger.debug("No default value for hwcid %s", hwcid)
-                        v = 1
-                    else:
-                        dv = motu.level_from_db(dv)
-                        if v != dv:
-                            v = dv
-                        else:
-                            v = 1
-                else:
-                    return
-            else:
-                v = motu.db_from_raw(v, raw_db_range_mapping)
-                v = motu.level_from_db(v)
-            if self.ds:
-                await self.ds.set(path, v)
-        elif path_type in ('mute',):
-            if re.match(r"Down", v):
-                if self.ds:
-                    await self.ds.toggle(path)
-        elif path_type == 'solo':
-            if re.match(r"Down", v):
-                if self.ds:
-                    if self.ds.get('mix/monitor/0/override') != -1.0:
-                        await self.ds.set(path, 1.0)
-                    else:
-                        await self.ds.toggle(path)
-                    await self.ds.set('mix/monitor/0/override', -1.0)
-        elif path_type in ('override',):
-            if re.match(r"Down", v):
-                if self.ds:
-                    try:
-                        override = 1024 + float(path_match.group(2))
-                    except ValueError:
-                        logger.warning("Configuration error for HWCID %s",
-                                       hwcid)
-                        return
-                    else:
-                        path = os.path.dirname(path)
-                    if self.ds.get(path) == override:
-                        await self.ds.set(path, -1.0)
-                    else:
-                        await self.ds.set(path, override)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            # Linux; ignore if unsupported (e.g. some non-Linux builds)
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            if hasattr(socket, "TCP_KEEPINTVL"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
+            if hasattr(socket, "TCP_KEEPCNT"):
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+            if hasattr(socket, "TCP_USER_TIMEOUT"):
+                sock.setsockopt(
+                    socket.IPPROTO_TCP,
+                    socket.TCP_USER_TIMEOUT,
+                    10_000,
+                )
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError as e:
+            logger.debug("Could not configure panel socket options: %s", e)
 
-    def set_ds(self, datastore):
-        self.ds = datastore
+    def stop(self) -> None:
+        """Signal long-running loops to exit; blocks reconnect."""
+        self._stopped = True
 
-    def set_ms(self, meters):
-        self.ms = meters
+    def set_change_controller(self, controller: Any) -> None:
+        """Attach controller implementing on_change(data, *, source, origin=None)."""
+        self._change_controller = controller
 
-    async def init_feedback(self):
-        if not self.ds:
-            logger.warning("Datastore should be set first")
-            return
-        if not self.ms:
-            logger.warning("Meters should be set first")
-            return
-        logger.info("Initializing the panel feedback")
-        dd = {}
-        md = {}
-        for path in feedback_map:
-            try:
-                v = self.ds.get(path)
-            except KeyError:
-                for i in [str(s) for s in range(15)] + ['peaks']:
-                    try:
-                        v = self.ms.get(os.path.join(path, i))
-                    except KeyError:
-                        logger.warning("Path %s is not available", path)
-                        continue
-                    else:
-                        md[path] = v
-            else:
-                dd[path] = v
-        logger.debug("Init datastore feedback %s", dd)
-        logger.debug("Init meters feedback %s", md)
-        await self.process_data_feedback(dd)
-        await self.process_meters_feedback(md)
+    def set_feedback_controller(self, controller: Any) -> None:
+        """Attach controller implementing init_feedback()."""
+        self._feedback_controller = controller
 
-    async def connect(self, retries=20, retry_interval_sec=10, timeout=10):
-        if self.connection_in_progress:
+    async def connect(
+        self,
+        *,
+        retries: int | None = 20,
+        retry_interval_sec: int | float = 10,
+        timeout: int | float = 10,
+    ) -> None:
+        if self._stopped:
+            logger.info("Shutdown is in progress, connect aborted")
             return
-        self.connection_in_progress = True
+        if self._disconnect_in_progress:
+            logger.info("Disconnect is in progress, connect aborted")
+            return
+        if self._connection_in_progress:
+            logger.info("Another connection is in progress, connect aborted")
+            return
+        self._connection_in_progress = True
         logger.info("Connecting to %s:%s...", self.host, self.port)
         attempt = 0
-        while not self.connected:
-            attempt += 1
-            try:
-                self.reader, self.writer = await asyncio.wait_for(
-                    asyncio.open_connection(
-                        self.host,
-                        self.port,
-                    ),
-                    timeout=timeout
-                )
-            except (ConnectionRefusedError, OSError, TimeoutError) as e:
-                logger.warning(
-                    "Connection to %s:%s failed (%s)",
-                    self.host,
-                    self.port,
-                    type(e).__name__,
-                )
-                logger.debug("%s", e)
-                if retries is not None and attempt > retries:
-                    logger.error(
-                        "Maximum retries reached for %s:%s",
-                        self.host,
-                        self.port,
+        try:
+            while not self.connected and not self._stopped:
+                attempt += 1
+                try:
+                    self._reader, self._writer = await asyncio.wait_for(
+                        asyncio.open_connection(
+                            self.host,
+                            self.port,
+                        ),
+                        timeout=timeout,
                     )
-                    self.connection_in_progress = False
-                    break
-                await asyncio.sleep(retry_interval_sec)
-                logger.debug(
-                    "\tRetrying... %s/%s",
-                    attempt,
-                    float('inf') if retries is None else retries,
-                )
-            else:
-                self.connected = True
-                logger.info(
-                    "Connected to %s:%s after %s attempts.",
-                    self.host,
-                    self.port,
-                    attempt,
-                )
-                self.connection_in_progress = False
-                await self.initialize()
+                except (ConnectionRefusedError, OSError, TimeoutError) as e:
+                    logger.warning(
+                        "Connection to %s:%s failed (%s)",
+                        self.host,
+                        self.port,
+                        type(e).__name__,
+                    )
+                    logger.debug("%r", e)
+                    if retries is not None and attempt > retries:
+                        logger.error(
+                            "Maximum retries reached for %s:%s",
+                            self.host,
+                            self.port,
+                        )
+                        break
+                    await asyncio.sleep(retry_interval_sec)
+                else:
+                    self._configure_socket(self._writer)
+                    self.connected = True
+                    logger.info(
+                        "Connected to %s:%s after %s attempts.",
+                        self.host,
+                        self.port,
+                        attempt,
+                    )
+        finally:
+            self._connection_in_progress = False
+        if self.connected and not self._stopped:
+            await self.initialize()
 
-    async def initialize(self):
-        hello_msg = [{'Command': {'SendPanelInfo': True}}]
-        await self.send(hello_msg)
-        s_t_msg = await self._get_sleep_timeout()
-        await self.send(s_t_msg)
-        await self.reset_panel_sleep()
-        #  TODO: Figure out a way to only log this after response is
-        #  received from the panel
+    async def initialize(self) -> None:
+        # Responses from the panel are handled only after the panel
+        # handlers are started
+        # TODO: Try await self.receive() for each expected response,
+        # may not work with handle_requests() loop.
+        await self.send(self.cmd_get_panel_info())
+        await self.send(self.cmd_get_panel_map())
+        await self.send(self.cmd_get_panel_topology())
+        await self.send(self.cmd_get_sleep_timeout())
+        await self.send(self.cmd_set_sleep_timeout(self.sleep_timeout_ms))
+        await self.send(self.cmd_set_sleep_mode(self.sleep_mode))
+        await self.send(self.cmd_set_sleep_screen_saver(self.sleep_screen_saver))
+        await self.send(
+            self.cmd_set_panel_brightness(
+                leds=self.panel_brightness_leds,
+                oleds=self.panel_brightness_oleds,
+            )
+        )
+        await self.send(self.cmd_set_dimmed_gain(self.panel_dimmed_gain))
+        # Yield for other background tasks
+        await asyncio.sleep(0)
         logger.info("Raw Panel %s is initialized", self.host)
 
-    async def disconnect(self):
-        self.disconnect_in_progress = True
-        logger.info("Closing connection to %s:%s...", self.host, self.port)
-        self.writer.close()
-        await self.writer.wait_closed()
-        self.connected = False
-        self.disconnect_in_progress = False
+    async def disconnect(self, *, purge: bool = False) -> None:
+        if self._disconnect_in_progress:
+            logger.info("Another disconnect is in progress, disconnect aborted")
+            return
+        if self._connection_in_progress:
+            logger.info("Connect is in progress, disconnect aborted")
+            return
 
-    async def purge_panel_info(self):
+        self._disconnect_in_progress = True
+        logger.info("Closing connection to %s:%s...", self.host, self.port)
+
+        writer = self._writer
+        self._reader = None
+        self._writer = None
+        self.connected = False
+
+        try:
+            if writer is not None:
+                try:
+                    writer.close()
+                    await asyncio.wait_for(writer.wait_closed(), timeout=2)
+                except (TimeoutError, ConnectionResetError, OSError) as e:
+                    logger.warning(
+                        "Can't close the connection gracefully (%s); "
+                        "aborting transport",
+                        type(e).__name__,
+                    )
+                    logger.debug("%r", e)
+                    transport = writer.transport
+                    if transport is not None and not transport.is_closing():
+                        transport.abort()
+            logger.info("Connection to %s:%s is closed", self.host, self.port)
+            if purge:
+                self._purge_panel_info()
+        finally:
+            self._disconnect_in_progress = False
+
+    def _purge_panel_info(self) -> None:
         for key in self.info:
             self.info[key] = None
+        logger.info("Panel info was purged")
 
-    async def handle_lost_connection(self):
-        if self.disconnect_in_progress or self.connection_in_progress:
-            return
-        self.disconnect_in_progress = True
+    async def handle_lost_connection(self) -> None:
         logger.warning("Connection to %s:%s was lost", self.host, self.port)
-        self.writer = None
-        self.reader = None
-        self.connected = False
-        await self.purge_panel_info()
-        self.disconnect_in_progress = False
-
-    async def set_panel_sleep(self):
-        s_t_msg = await self._set_sleep_timeout(1)  # 1s
-        await self.send(s_t_msg)
-
-    async def reset_panel_sleep(self):
-        if self.info['panel_sleep_timeout'] or \
-           self.info['panel_sleep_timeout'] is None:
-            s_t_msg = await self._set_sleep_timeout(48 * 60 * 60 * 1000)  # 48h
-            await self.send(s_t_msg)
-        if self.info['isSleeping']:
-            wakeup_msg = [{'Command': {'WakeUp': True}}]
-            await self.send(wakeup_msg)
-
-    async def handle_sleep_timeout(self):
-        while True:
-            t = time.perf_counter()
-            if not self.info['isSleeping']:
-                if self.last_activity + self.sleep_timeout <= t:
-                    await self.set_panel_sleep()
-                    await asyncio.sleep(10)
-            await asyncio.sleep(1)
-
-    async def handle_request(self, request):
-        try:
-            key, value = request.split('=')
-        except AttributeError:
-            logger.debug("Request is None")
+        if self._stopped:
+            logger.info("Shutdown is in progress, not handling lost connection")
             return
+        if self._disconnect_in_progress:
+            logger.info("Disconnect is in progress, not handling lost connection")
+            return
+        if self._connection_in_progress:
+            logger.info("Connect is in progress, not handling lost connection")
+            return
+        await self.disconnect(purge=True)
+
+    async def wakeup(self, *, force: bool = False) -> None:
+        """Send wakeup message.
+
+        Throttled by default so high-rate feedback does not spam the panel.
+        """
+        now = time.perf_counter()
+        if force or (now - self._last_wakeup) > self._wakeup_min_interval:
+            # TODO: Reset the panel sleep timeout if it is different from the property
+            await self.send(self.cmd_wakeup())
+            self._last_wakeup = now
+
+    async def handle_request(self, request: str) -> None:
+        try:
+            key, value = request.split("=", 1)
         except ValueError:
             if not len(request):
-                logger.warning("Request is empty")
-                await self.handle_lost_connection()
+                logger.debug("Request is empty line")
                 return
-            elif request == 'nack':
+            elif request == "nack":
                 logger.warning("Request is 'nack'")
                 return
             else:
                 logger.warning("Invalid request: %s", request)
+                return
         try:
-            command, hwcid = key.split('#')
+            command, hwcid = key.split("#")
         except ValueError:
             command = key
             params = (value,)
         else:
             params = hwcid, value
         try:
-            await self.commands[command](*params)
+            cmd = self._commands[command]
         except KeyError:
             logger.warning("Unhandled panel message: %s", request)
             return
+        # Handle both async and sync methods
+        if inspect.iscoroutinefunction(cmd):
+            await cmd(*params)
+        else:
+            cmd(*params)
 
-    async def process_buffers(self):
+    async def process_buffers(self) -> None:
         logger.info("Processing buffered hardware changes...")
-        while True:
-            for hwid, v in self.hw_change_buffer.items():
-                t = time.perf_counter()
-                value = v['value']
-                if t - v['time'] >= self.delay:
-                    del self.hw_change_buffer[hwid]
-                    await self._hardware_change_process(hwid, value)
+        while not self._stopped:
+            try:
+                if not self._hw_change_buffer:
+                    await asyncio.sleep(self.idle_sleep)
+                    continue
+                for hwid, v in self._hw_change_buffer.items():
+                    t = time.perf_counter()
+                    value = v["value"]
+                    if t - v["time"] >= self.delay:
+                        del self._hw_change_buffer[hwid]
+                        await self._hardware_change_process(hwid, value)
                     break
-            await asyncio.sleep(self.delay)
+                await asyncio.sleep(self.delay)
+            except asyncio.CancelledError:
+                break
         logger.info("Buffer processing finished")
 
-    async def handle_requests(self):
+    async def handle_requests(self) -> None:
         logger.info("Handling requests from the panel...")
-        while True:
+        while not self._stopped:
             try:
                 r = await self.receive()
+                if r is None:
+                    await asyncio.sleep(0.1)
+                    continue
                 await self.handle_request(r)
             except asyncio.CancelledError:
-                await self.disconnect()
                 break
         logger.info("Requests from the panel are not handled anymore")
 
-    async def send(self, message, timeout=10):
+    @staticmethod
+    def batch_hwc(messages: list[dict]) -> dict | list | None:
+        """Collapse panel messages into one write.
+
+        Messages with the same body share one HWCIDs list. Different
+        bodies are wrapped as [{"States": [...]}]. One unique body is
+        sent as-is. Insertion order is kept.
+        """
+        if not messages:
+            return None
+        grouped: dict[str, dict] = {}
+        for msg in messages:
+            body = {k: v for k, v in msg.items() if k != "HWCIDs"}
+            key = json.dumps(body, separators=(",", ":"), sort_keys=True)
+            existing = grouped.setdefault(key, msg)
+            if existing is not msg:
+                existing["HWCIDs"].extend(msg["HWCIDs"])
+        states = list(grouped.values())
+        if len(states) == 1:
+            return states[0]
+        return [{"States": states}]
+
+    async def send(self, message: dict | list, *, timeout: int | float = 1) -> None:
+        if self._stopped:
+            return
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while self.connection_in_progress or self.disconnect_in_progress:
-            await asyncio.sleep(5)
-        if not self.connected:
+        while not self._stopped and (
+            self._connection_in_progress or self._disconnect_in_progress
+        ):
+            await asyncio.sleep(0.1)
+        if self._stopped or not self.connected or self._writer is None:
             return
-        message = json.dumps(message, separators=(',', ':'))
-        logger.debug(message)
-        self.writer.write('{}\n'.format(message).encode('ascii'))
+
+        payload = json.dumps(message, separators=(",", ":"))
+        logger.debug(payload)
         try:
-            await asyncio.wait_for(self.writer.drain(), timeout=timeout)
+            self._writer.write(f"{payload}\n".encode("ascii"))
+            await asyncio.wait_for(self._writer.drain(), timeout=timeout)
+            transport = self._writer.transport
+            logger.debug(
+                "write_buf=%s closing=%s",
+                transport.get_write_buffer_size(),
+                self._writer.is_closing(),
+            )
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
                 "Message was not delivered: %s (%s)",
-                message,
+                payload,
                 type(e).__name__,
             )
-            logger.debug("%s", e)
+            logger.debug("%r", e)
             await self.handle_lost_connection()
 
-    async def receive(self):
+    async def receive(self) -> str | None:
+        if self._stopped:
+            return None
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while self.connection_in_progress or self.disconnect_in_progress:
-            await asyncio.sleep(5)
-        if not self.connected:
-            return
+        while not self._stopped and (
+            self._connection_in_progress or self._disconnect_in_progress
+        ):
+            await asyncio.sleep(0.1)
+        if self._stopped or not self.connected or self._reader is None:
+            return None
         try:
-            raw_record = await self.reader.readline()
+            raw_record = await self._reader.readline()
         except (ConnectionResetError, OSError, TimeoutError) as e:
             logger.warning(
-                "Request listner was interrupted (%s)",
+                "Panel read failed/timed out (%s)",
                 type(e).__name__,
             )
-            logger.debug("%s", e)
+            logger.debug("%r", e)
             await self.handle_lost_connection()
-            return
+            return None
+
+        # Clean peer close or half-close
+        if not raw_record:
+            logger.warning("Panel connection closed (EOF)")
+            await self.handle_lost_connection()
+            return None
+
         try:
             record = raw_record.decode().strip()
-        except UnicodeDecodeError as e:
-            logger.error("Undecodable panel data: %r", raw_record)
-            raise e
-        else:
-            logger.debug(record)
+        except UnicodeDecodeError:
+            logger.warning("Undecodable panel data: %r", raw_record)
+            return None
+        logger.debug(record)
         return record
 
-    async def process_data_feedback(self, d):
-        for k, v in d.items():
-            try:
-                mapping = feedback_map[k]
-            except KeyError:
-                logger.debug("path %s is not mapped", k)
-                continue
-            t = re.search(r"\w+$", k)[0]
-            if t in ('send', 'fader'):
-                db_value = motu.level_to_db(float(v))
-                raw_value = motu.db_from_raw(
-                    db_value,
-                    raw_db_range_mapping,
-                    reverse=True
-                )
-            for m in mapping:
-                hwcid = mapping[m]['hwcid']
-                msg = {}
-                if m.startswith(('button', 'fader')):
-                    try:
-                        k = v == mapping[m]['value']
-                    except KeyError:
-                        k = v
-                    try:
-                        mode = mapping[m]['mode'].copy()
-                    except KeyError:
-                        pass
-                    else:
-                        for mode_type, mode_value in mode.items():
-                            try:
-                                mode[mode_type] = (
-                                    mode_value[0] if k else mode_value[1]
-                                )
-                            except TypeError:
-                                pass
-                        msg.update(await self._set_mode(hwcid, **mode))
-                    try:
-                        color = mapping[m]['color'].copy()
-                    except KeyError:
-                        pass
-                    else:
-                        for color_type, color_value in color.items():
-                            try:
-                                color[color_type] = (
-                                    color_value[0] if k else color_value[1]
-                                )
-                            except TypeError:
-                                pass
-                        msg.update(await self._set_color(hwcid, **color))
-                if m == 'fader':
-                    msg.update(await self._move_fader(hwcid, raw_value))
-                elif m == 'display':
-                    try:
-                        txt = mapping[m]['text']
-                    except KeyError:
-                        txt = {}
-                    msg.update(await self._set_text(hwcid,
-                                                    text1=db_value,
-                                                    **txt))
-                await self.send(msg)
+    # TODO: Refactor message building logic
+    def cmd_get_panel_info(self) -> list:
+        return [{"Command": {"SendPanelInfo": True}}]
 
-    async def process_meters_feedback(self, d):
-        # Currently sends data for all meters even if only 1 meter data changed
-        self.last_activity = time.perf_counter()
-        await self.reset_panel_sleep()
-        msg = {}
-        base_path = 'mix/level'
-        try:
-            mapping = feedback_map[base_path]
-        except KeyError:
-            logger.warning("path %s is not mapped", base_path)
-            return
-        for m in mapping:
-            hwcid = mapping[m]['hwcid']
-            data1 = None
-            data2 = None
-            peak1 = None
-            peak2 = None
-            multiplier = 1
-            if re.match(r"display\d+$", m):
-                try:
-                    pre = mapping[m]['pre_fader']
-                except KeyError:
-                    pass
-                else:
-                    if not pre:
-                        try:
-                            multiplier = self.ds.get(
-                                mapping[m]['fader_path']
-                            ) * int(not self.ds.get(
-                                mapping[m]['mute_path'])
-                            )
-                        except KeyError:
-                            logger.warning(
-                                "fader_path and mute_path should be \
-                                configured if pre_fader is set to False"
-                            )
-                try:
-                    audio_meter = mapping[m]['audio_meter']
-                except KeyError:
-                    pass
-                else:
-                    for k, v in d.items():
-                        if not k.startswith(base_path):
-                            logger.debug("Skipping feedback: %s: %s", k, v)
-                            continue
-                        try:
-                            k, s = os.path.split(k)
-                        except Exception:
-                            logger.warning("Can't split %s", k)
-                        if s != 'peaks':
-                            try:
-                                data1 = v[mapping[m]['channels'][0]]
-                            except (KeyError, IndexError):
-                                pass
-                            else:
-                                data1 = await self._level_to_raw(
-                                    data1,
-                                    raw_db_range_mapping_meters,
-                                    multiplier=multiplier
-                                )
-                            try:
-                                data2 = v[mapping[m]['channels'][1]]
-                            except (KeyError, IndexError):
-                                pass
-                            else:
-                                data2 = await self._level_to_raw(
-                                    data2,
-                                    raw_db_range_mapping_meters,
-                                    multiplier=multiplier
-                                )
-                        else:
-                            try:
-                                peak1 = v[mapping[m]['channels'][0]]
-                            except (KeyError, IndexError):
-                                pass
-                            else:
-                                peak1 = await self._level_to_raw(
-                                    peak1,
-                                    raw_db_range_mapping_meters,
-                                    multiplier=multiplier
-                                )
-                            try:
-                                peak2 = v[mapping[m]['channels'][1]]
-                            except (KeyError, IndexError):
-                                pass
-                            else:
-                                peak2 = await self._level_to_raw(
-                                    peak2,
-                                    raw_db_range_mapping_meters,
-                                    multiplier=multiplier
-                                )
-                    msg.update(await self._set_audio_meter(hwcid,
-                                                           data1=data1,
-                                                           data2=data2,
-                                                           peak1=peak1,
-                                                           peak2=peak2,
-                                                           **audio_meter))
-                await self.send(msg)
+    def cmd_get_panel_map(self) -> list:
+        return [{"Command": {"ReportHWCavailability": True}}]
 
-    async def _level_to_raw(self, value, range_mapping, multiplier=1):
-        db = motu.level_to_db(float(value * multiplier / 1000))
-        return motu.db_from_raw(db, range_mapping, reverse=True)
+    def cmd_get_panel_topology(self) -> list:
+        return [{"Command": {"SendPanelTopology": True}}]
 
-    async def _get_sleep_timeout(self):
+    def cmd_wakeup(self) -> list:
+        return [{"Command": {"WakeUp": True}}]
+
+    def cmd_get_sleep_timeout(self) -> list:
         return [{"Command": {"GetSleepTimeout": True}}]
 
-    async def _set_sleep_timeout(self, timeout_ms):
-        return [{"Command": {"SetSleepTimeout": {"Value": timeout_ms}}}]
+    def cmd_set_sleep_timeout(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default."""
+        payload = {} if not value else {"Value": value}
+        return [{"Command": {"SetSleepTimeout": payload}}]
 
-    async def _set_mode(self, hwcid, state=None,
-                        blink_pattern=None, output=False):
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCMode": {}
-        }
+    def cmd_set_sleep_mode(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default.
+
+        0 = FireWorks - LEDs animate on the panel
+        1 = Buttons Off
+        """
+        payload = {} if not value else {"Mode": value}
+        return [{"Command": {"SetSleepMode": payload}}]
+
+    def cmd_set_sleep_screen_saver(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default.
+
+        0 = "Wake Up On Key Press"
+        1 = "Sheep And Goats"
+        2 = "Save The Oleds"
+        3 = Just Dimmed - keeps content, dims the panel
+        """
+        payload = {} if not value else {"Type": value}
+        return [{"Command": {"SetSleepScreenSaver": payload}}]
+
+    def cmd_set_dimmed_gain(self, value: int | None = None) -> list:
+        """Omit value to send {} and let the panel use its default.
+
+        Gain is 0 or 1-64. Full gain is 64, a good dimmed value is 4-16.
+        0 resets to the panel defaults (10-16).
+        """
+        payload = {} if not value else {"Value": value}
+        return [{"Command": {"SetDimmedGain": payload}}]
+
+    def cmd_set_panel_brightness(
+        self, *, leds: int | None = None, oleds: int | None = None
+    ) -> list:
+        """LED and OLED brightness, range 0-8.
+
+        A missing field is set to 0 by the panel. {} sets both to 0.
+        """
+        payload = {}
+        if leds:
+            payload["LEDs"] = leds
+        if oleds:
+            payload["OLEDs"] = oleds
+        return [{"Command": {"PanelBrightness": payload}}]
+
+    def hwc_mode(
+        self,
+        hwcid: int,
+        *,
+        state: int | None = None,
+        blink_pattern: int | None = None,
+        output: bool = False,
+    ) -> dict:
+        """HWCMode message. A missing state is off."""
+        payload = {}
         if state:
-            msg["HWCMode"]["State"] = state
+            payload["State"] = state
         if blink_pattern:
-            msg["HWCMode"]["BlinkPattern"] = blink_pattern
+            payload["BlinkPattern"] = blink_pattern
         if output:
-            msg["HWCMode"]["Output"] = True
-        return msg
+            payload["Output"] = True
+        return {"HWCIDs": [hwcid], "HWCMode": payload}
 
-    async def _move_fader(self, hwcid, value):
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCExtended": {
-                "Interpretation": 5
-            }
-        }
+    def hwc_fader(self, hwcid: int, value: int | None) -> dict:
+        """Fader position message. A missing value is 0."""
+        payload = {"Interpretation": 5}
         if value:
-            msg["HWCExtended"]["Value"] = value
-        return msg
+            payload["Value"] = value
+        return {"HWCIDs": [hwcid], "HWCExtended": payload}
 
-    async def _set_color(self, hwcid, index=None, rgb=None):
+    def hwc_color(
+        self,
+        hwcid: int,
+        *,
+        index: int | None = None,
+        red: dict | None = None,
+        green: dict | None = None,
+        blue: dict | None = None,
+    ) -> dict:
+        payload = {}
+        rgb = {}
+        if red:
+            rgb["Red"] = red
+        if green:
+            rgb["Green"] = green
+        if blue:
+            rgb["Blue"] = blue
         if rgb:
-            color = {
-                "ColorRGB": rgb
-            }
+            payload["ColorRGB"] = rgb
         elif index:
-            color = {
-                "ColorIndex": {
-                    "Index": index
-                }
-            }
-        else:
-            color = {
-                "ColorIndex": {}
-            }
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCColor": color
-        }
-        return msg
+            payload["ColorIndex"] = {"Index": index}
+        return {"HWCIDs": [hwcid], "HWCColor": payload}
 
-    async def _set_text(self, hwcid, value1=None, title=None,
-                        solid_header=False, text1=None,
-                        formatting=7):
-        msg = {
-            "HWCIDs": [hwcid],
-            "HWCText": {}
-        }
+    def hwc_text(
+        self,
+        hwcid: int,
+        *,
+        value1: int | None = None,
+        value2: int | None = None,
+        title: str | None = None,
+        solid_header: bool | None = None,
+        text1: str | None = None,
+        text2: str | None = None,
+        formatting: int | None = None,  # Formatting for value1/value2
+        state_icon: int | None = None,
+        modifier_icon: int | None = None,
+        pair_mode: int | None = None,
+        inverted: bool | None = None,
+        # TODO: Add scale-related properties (type/range/limit)
+        # TODO: Add text_scroll properties if panel supports it (RawPanelSupport)
+        # TODO: Add text_styling properties (font/padding, etc.)
+    ) -> dict:
+        payload = {}
         if value1:
-            msg["HWCText"]["IntegerValue"] = value1
+            payload["IntegerValue"] = value1
+        if value2:
+            payload["IntegerValue2"] = value2
         if title:
-            msg["HWCText"]["Title"] = title
+            payload["Title"] = title
         if solid_header:
-            msg["HWCText"]["SolidHeaderBar"] = True
-        if text1 is not None:
-            msg["HWCText"]["TextLine1"] = str(text1)
+            payload["SolidHeaderBar"] = True
+        if text1:
+            payload["TextLine1"] = text1
+        if text2:
+            payload["TextLine2"] = text2
         if formatting:
-            msg["HWCText"]["Formatting"] = formatting
-        return msg
+            payload["Formatting"] = formatting
+        if state_icon:
+            payload["StateIcon"] = state_icon
+        if modifier_icon:
+            payload["ModifierIcon"] = modifier_icon
+        if pair_mode:
+            payload["PairMode"] = pair_mode
+        if inverted:
+            payload["Inverted"] = True
+        return {"HWCIDs": [hwcid], "HWCText": payload}
 
-    async def _set_audio_meter(self, hwcid, meter_type=1, mono=0,
-                               title=None, w=176, h=32,
-                               data1=None, peak1=None,
-                               data2=None, peak2=None):
-        msg = {
-            "HWCIDs": [hwcid],
-            "Processors": {
-                "Audiometer": {
-                    "MeterType": meter_type,
-                    "W": w,
-                    "H": h
-                }
-            }
-        }
+    def hwc_meter(
+        self,
+        hwcid: int,
+        *,
+        meter_type: int | None = None,
+        mono: bool | None = None,
+        title: str | None = None,
+        w: int = 176,  # TODO: Grab from the panel topology
+        h: int = 32,  # TODO: Grab from the panel topology
+        data1: int | None = None,
+        peak1: int | None = None,
+        data2: int | None = None,
+        peak2: int | None = None,
+    ) -> dict:
+        """Audiometer message. A missing Data or Peak field is 0."""
+        payload = {}
+        if meter_type:
+            payload["MeterType"] = meter_type
         if mono:
-            msg["Processors"]["Audiometer"]["Mono"] = mono
+            payload["Mono"] = True
         if title:
-            msg["Processors"]["Audiometer"]["Title"] = title
+            payload["Title"] = title
         if data1:
-            msg["Processors"]["Audiometer"]["Data1"] = data1
+            payload["Data1"] = data1
         if peak1:
-            msg["Processors"]["Audiometer"]["Peak1"] = peak1
+            payload["Peak1"] = peak1
         if data2:
-            msg["Processors"]["Audiometer"]["Data2"] = data2
+            payload["Data2"] = data2
         if peak2:
-            msg["Processors"]["Audiometer"]["Peak2"] = peak2
-        return msg
+            payload["Peak2"] = peak2
+        if payload:
+            payload["W"] = w
+            payload["H"] = h
+        return {"HWCIDs": [hwcid], "Processors": {"Audiometer": payload}}

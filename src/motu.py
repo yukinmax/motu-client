@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-import aiohttp
 import asyncio
 import json
 import logging
 import math
 import random
+import time
 from dataclasses import dataclass
 from typing import Any
 
+import aiohttp
+
 logger = logging.getLogger(__name__)
 
-level_range = (0, 10 ** (12 / 20))
+LEVEL_RANGE = (0, 10 ** (12 / 20))
 
-# Motu long-poll hold is ~15s; client timeout slightly above that.
-DEFAULT_POLL_TIMEOUT_SEC = 20
-DEFAULT_MUTATE_TIMEOUT_SEC = 5
-DEFAULT_MUTATE_RETRIES = 1
+# Motu long-poll hold is ~10s; client timeout slightly above that.
+DEFAULT_POLL_TIMEOUT_SEC = 15
+DEFAULT_MUTATE_TIMEOUT_SEC = 2
+DEFAULT_MUTATE_RETRIES = 0
 DEFAULT_RETRY_INTERVAL_SEC = 10
 DEFAULT_HOSTNAME = "ultralite-avb.local"
 
@@ -25,17 +27,21 @@ DEFAULT_HOSTNAME = "ultralite-avb.local"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def limit_to_range(value: float, minimum: float, maximum: float) -> float:
     return max(min(value, maximum), minimum)
 
 
-def level_to_db(value: float) -> float:
+def level_to_db(value: int | float) -> float:
+    """Linear gain to dB. 0 returns -inf."""
+    value = float(value)
     if value == 0:
         return -math.inf
-    return round(20 * math.log10(value), 2)
+    return 20 * math.log10(value)
 
 
-def level_from_db(db_value: float) -> float:
+def db_to_level(db_value: int | float) -> float:
+    """dB to linear gain. Clamps above 12 and below -120."""
     db_value = float(db_value)
     if db_value > 12:
         db_value = 12
@@ -44,58 +50,9 @@ def level_from_db(db_value: float) -> float:
     return 10 ** (db_value / 20)
 
 
-# TODO: Consider splitting into 2 functions
-def db_from_raw(
-    value: int | float,
-    range_mapping: tuple[tuple, ...],
-    reverse: bool = False,
-    ) -> float | int:
-    from_index = int(reverse)
-    to_index = int(not reverse)
-    type_conversion = int if reverse else float
-    try:
-        from_min_abs = range_mapping[0][from_index][0]
-        to_min_abs = range_mapping[0][to_index][0]
-    except TypeError:
-        from_min_abs = range_mapping[0][from_index]
-        to_min_abs = range_mapping[0][to_index]
-    try:
-        from_max_abs = range_mapping[-1][from_index][1]
-        to_max_abs = range_mapping[-1][to_index][1]
-    except TypeError:
-        from_max_abs = range_mapping[-1][from_index]
-        to_max_abs = range_mapping[-1][to_index]
-    value = limit_to_range(value, from_min_abs, from_max_abs)
-    for i in range_mapping:
-        try:
-            from_min = i[from_index][0]
-            from_max = i[from_index][1]
-            to_min = i[to_index][0]
-            to_max = i[to_index][1]
-        except TypeError:
-            if value == i[from_index]:
-                return type_conversion(i[to_index])
-        else:
-            if from_min <= value < from_max:
-                break
-    cr = (to_max - to_min) / (from_max - from_min)
-    out_value = ((value - from_min) * cr) + to_min
-    out_value = limit_to_range(out_value, to_min_abs, to_max_abs)
-    return type_conversion(out_value)
-
-
 def dict_diff(d_old: dict, d_new: dict) -> dict:
-    return dict(set(d_new.items()) - set(d_old.items()))
-
-
-def dict_values_to_tuples(d: dict) -> dict:
-    d_new = {}
-    for k, v in d.items():
-        try:
-            d_new[k] = tuple(v)
-        except TypeError:
-            d_new[k] = v
-    return d_new
+    """Keys from d_new that are new or different."""
+    return {k: v for k, v in d_new.items() if k not in d_old or d_old[k] != v}
 
 
 def generate_client_id() -> int:
@@ -103,8 +60,8 @@ def generate_client_id() -> int:
 
 
 @dataclass(slots=True)
-class HttpResult:
-    """Minimal response shape used by Store / DataStore."""
+class _HttpResult:
+    """Minimal response shape used by _Store / DataStore."""
 
     status_code: int
     reason: str | None
@@ -165,11 +122,9 @@ class HTTPClient:
         data: bytes | str | None = None,
         retries: int | None = None,
         timeout: float | None = None,
-    ) -> HttpResult | None:
+    ) -> _HttpResult | None:
         if not self.started:
-            logger.error(
-                "HTTP request attempted before session start: %s", url
-            )
+            logger.error("HTTP request attempted before session start: %s", url)
             return None
 
         headers: dict[str, str] = {}
@@ -201,7 +156,7 @@ class HTTPClient:
                         body = None
                         if status == 200:
                             body = await resp.json(content_type=None)
-                        return HttpResult(status, reason, etag, body)
+                        return _HttpResult(status, reason, etag, body)
 
                     if status != 304:
                         logger.error("Error code %s - %s", status, reason)
@@ -220,7 +175,7 @@ class HTTPClient:
                 await asyncio.sleep(self._retry_interval_sec)
 
 
-class Store:
+class _Store:
     def __init__(
         self,
         http: HTTPClient,
@@ -236,13 +191,23 @@ class Store:
         self.etag: str | None = None
         self.client_id: int | None = None
         self.data: dict = {}
-        self.change_handler = None
+        self._change_controller = None
+        self._stopped = False
+
+    @property
+    def idle(self) -> bool:
+        return False
 
     def _url(self) -> str:
         return f"http://{self.hostname}/{self.base_path}"
 
+    def stop(self) -> None:
+        """Signal poll loops to exit on next iteration."""
+        self._stopped = True
+
     async def refresh(
         self,
+        *,
         diff_check: bool = False,
         handle_changes: bool = True,
     ) -> dict | None:
@@ -263,10 +228,9 @@ class Store:
 
         payload = response.json() or {}
         if diff_check:
-            new_data = dict_values_to_tuples(payload)
-            data_diff = dict_diff(self.data, new_data)
+            data_diff = dict_diff(self.data, payload)
         else:
-            data_diff = dict_values_to_tuples(payload)
+            data_diff = payload
 
         etag = response.etag
         if etag:
@@ -279,36 +243,48 @@ class Store:
         if data_diff:
             self.data.update(data_diff)
             logger.debug("Modified: %s -> %s", self.base_path, data_diff)
-            if self.change_handler and handle_changes:
-                await self.change_handler(data_diff)
+            if self._change_controller and handle_changes:
+                await self._change_controller.on_change(
+                    data_diff, source=self.base_path
+                )
             return data_diff
         return None
 
-    def get(self, path: str):
-        return self.data[path]
+    def get(self, path: str) -> Any | None:
+        return self.data.get(path)
 
     async def poll(
         self,
+        *,
         diff_check: bool = True,
         handle_changes: bool = True,
+        idle_interval: float = 0.0,
     ) -> None:
         logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
-        while True:
+        while not self._stopped:
             try:
-                await self.refresh(
+                started = time.perf_counter()
+                diff = await self.refresh(
                     diff_check=diff_check,
                     handle_changes=handle_changes,
                 )
-                # Yield so other tasks run if Motu answers immediately.
-                await asyncio.sleep(0)
+                interval = 0.0 if (diff or not self.idle) else idle_interval
+                wait = max(0, interval - (time.perf_counter() - started))
+                await asyncio.sleep(wait)
             except asyncio.CancelledError:
                 break
+        logger.info(
+            "Stopped polling MOTU %s (%s)",
+            self.base_path,
+            self.hostname,
+        )
 
-    def set_change_handler(self, handler) -> None:
-        self.change_handler = handler
+    def set_change_controller(self, controller: Any) -> None:
+        """Attach controller implementing on_change(data, *, source, origin=None)."""
+        self._change_controller = controller
 
 
-class DataStore(Store):
+class DataStore(_Store):
     def __init__(
         self,
         http: HTTPClient,
@@ -319,7 +295,9 @@ class DataStore(Store):
         self.base_path = "datastore"
         self.client_id = generate_client_id()
 
-    async def set(self, path: str, value) -> HttpResult | None:
+    async def set(
+        self, path: str, value: Any, *, origin: str | None = None
+    ) -> Any | None:
         data = f"json={json.dumps({path: value})}".encode()
         response = await self.http.request(
             self._url(),
@@ -329,28 +307,27 @@ class DataStore(Store):
             retries=DEFAULT_MUTATE_RETRIES,
             timeout=DEFAULT_MUTATE_TIMEOUT_SEC,
         )
-        if response is not None:
-            data_diff = {path: value}
-            self.data.update(data_diff)
-            logger.debug("Modified: %s -> %s", self.base_path, data_diff)
-            if self.change_handler:
-                await self.change_handler({path: value})
-        return response
+        # 204 has no body, so the sent value is the result. 200 is accepted
+        # the same way: request() only returns for 200/204.
+        if response is None or response.status_code not in (200, 204):
+            return None
+        data_diff = {path: value}
+        self.data.update(data_diff)
+        logger.debug("Modified: %s -> %s", self.base_path, data_diff)
+        if self._change_controller:
+            await self._change_controller.on_change(
+                data_diff, source=self.base_path, origin=origin
+            )
+        return value
 
-    async def toggle(self, path: str):
-        try:
-            s = self.get(path)
-        except KeyError:
-            return "FAILURE"
-        j = float(not s)
-        r = await self.set(path, j)
-        if r is not None and r.status_code == 204:
-            return j
-        logger.error("Failed to toggle %s", path)
-        return "FAILURE"
+    async def toggle(self, path: str) -> float | None:
+        current = self.get(path)
+        if current is None:
+            return None
+        return await self.set(path, float(not current))
 
 
-class Meters(Store):
+class Meters(_Store):
     def __init__(
         self,
         http: HTTPClient,
@@ -361,24 +338,48 @@ class Meters(Store):
         self.base_path = "meters"
         self.refresh_params = {"meters": "mix/level"}
         self.client_id = generate_client_id()
+        self.current_index: int | None = None
 
-    def update_peaks(self) -> dict:
-        filtered_data = {
-            k: v for k, v in self.data.items() if not k.endswith("peaks")
-        }
+    @property
+    def previous_levels(self) -> list | None:
+        """Previous meter samples, or None when everything should be sent."""
+        if self.current_index is None:
+            return None
+        return self.get(f"mix/level/{(self.current_index - 1) % 15}")
+
+    @property
+    def idle(self) -> bool:
+        """True when every peak is 0. False if peaks are not populated yet."""
+        peaks = self.data.get("mix/level/peaks")
+        if not peaks:
+            return False  # not populated yet
+        return not any(peaks)
+
+    def _update_peaks(self) -> dict:
+        """Peak of each channel across the 15 sample slots."""
+        filtered_data = {k: v for k, v in self.data.items() if not k.endswith("peaks")}
         if not filtered_data:
             return {}
         peaks = {
-            "mix/level/peaks": tuple(
-                max(values) for values in zip(*filtered_data.values())
-            )
+            "mix/level/peaks": [max(values) for values in zip(*filtered_data.values())]
         }
         self.data.update(peaks)
         logger.debug("Modified: %s -> %s", self.base_path, peaks)
         return peaks
 
+    def _set_current_index(self, data: dict) -> None:
+        for key in data:
+            if not key.startswith("mix/level/") or key.endswith("peaks"):
+                continue
+            try:
+                self.current_index = int(key.rsplit("/", 1)[-1])
+            except ValueError:
+                continue
+            return
+
     async def refresh(
         self,
+        *,
         diff_check: bool = True,
         handle_changes: bool = True,
     ) -> dict | None:
@@ -387,8 +388,11 @@ class Meters(Store):
             handle_changes=False,
         )
         if data_diff:
-            data_diff.update(self.update_peaks())
-            if self.change_handler and handle_changes:
-                await self.change_handler(data_diff)
+            self._set_current_index(data_diff)
+            data_diff.update(self._update_peaks())
+            if self._change_controller and handle_changes:
+                await self._change_controller.on_change(
+                    data_diff, source=self.base_path
+                )
             return data_diff
         return None

@@ -17,7 +17,7 @@
 - [x] Add solo button handling
 - [ ] Implement protobuf for panel communication
 - [x] Handle panel disconnect
-- [ ] Implement appropriate application shutdown without any leaking resources
+- [x] Implement appropriate application shutdown without any leaking resources
 - [x] Create Dockerfile and streamline the deployment
 - [ ] Implement config file
 - [ ] Decouple API service, MOTU connection handling and Skaarhoj Panel connection handling
