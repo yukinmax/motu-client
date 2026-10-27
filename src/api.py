@@ -144,9 +144,8 @@ async def mute_status() -> str:
     except KeyError:
         return "Error: No index field provided. Please specify index."
     path = f"mix/{bus}/{channel}/matrix/mute"
-    try:
-        result = motu_ds.get(path)
-    except KeyError:
+    result = motu_ds.get(path)
+    if result is None:
         return json.dumps({"status": "FAILURE"})
     return json.dumps({"status": str(result)})
 
@@ -162,9 +161,8 @@ async def mix_send_level_get() -> str:
     except KeyError:
         return "Error: No aux field provided. Please specify aux #."
     path = f"mix/chan/{channel}/matrix/aux/{aux}/send"
-    try:
-        result = motu_ds.get(path)
-    except KeyError:
+    result = motu_ds.get(path)
+    if result is None:
         return json.dumps({"status": "FAILURE"})
     try:
         fmt = request.args["format"]

@@ -247,8 +247,8 @@ class _Store:
             return data_diff
         return None
 
-    def get(self, path: str) -> Any:
-        return self.data[path]
+    def get(self, path: str) -> Any | None:
+        return self.data.get(path)
 
     async def poll(
         self,
@@ -318,10 +318,8 @@ class DataStore(_Store):
         return value
 
     async def toggle(self, path: str) -> float | None:
-        try:
-            current = self.get(path)
-        except KeyError:
-            logger.error("Cannot toggle missing path %s", path)
+        current = self.get(path)
+        if current is None:
             return None
         return await self.set(path, float(not current))
 
@@ -344,10 +342,7 @@ class Meters(_Store):
         """Previous meter samples, or None when everything should be sent."""
         if self.current_index is None:
             return None
-        try:
-            return self.get(f"mix/level/{(self.current_index - 1) % 15}")
-        except KeyError:
-            return None
+        return self.get(f"mix/level/{(self.current_index - 1) % 15}")
 
     @property
     def idle(self) -> bool:

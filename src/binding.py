@@ -292,6 +292,9 @@ class MotuController:
             if v != "Down":
                 return None
             current = self._ds.get(cfg.path)
+            if current is None:
+                logger.warning("Path %s is not available", cfg.path)
+                return None
             if cfg.default_level_db is None:
                 logger.debug("No default level for path %s", cfg.path)
                 return 1.0
@@ -330,6 +333,9 @@ class MotuController:
             logger.warning("Missing override_index for %s", cfg.path)
             return
         current = self._ds.get(cfg.path)
+        if current is None:
+            logger.warning("Path %s is not available", cfg.path)
+            return
         if current == cfg.override_value:
             await self._ds.set(cfg.path, OVERRIDE_DISABLED)
         else:
@@ -418,18 +424,15 @@ class PanelController:
         dd = {}
         md = {}
         for path in self._map.keys():
-            try:
-                v = self._ds.get(path)
-            except KeyError:
+            v = self._ds.get(path)
+            if v is None:
                 for i in [str(s) for s in range(15)] + ["peaks"]:
                     m_path = f"{path}/{i}"
-                    try:
-                        v = self._ms.get(m_path)
-                    except KeyError:
+                    v = self._ms.get(m_path)
+                    if v is None:
                         logger.warning("Path %s is not available", path)
                         continue
-                    else:
-                        md[m_path] = v
+                    md[m_path] = v
             else:
                 dd[path] = v
         logger.debug("Init datastore feedback %s", dd)
@@ -575,10 +578,9 @@ class PanelController:
     def _calculate_meter_multiplier(self, target: FeedbackTarget) -> float | None:
         if target.pre_fader:
             return 1.0
-        try:
-            fader = self._ds.get(target.fader_path)
-            muted = self._ds.get(target.mute_path)
-        except KeyError:
+        fader = self._ds.get(target.fader_path)
+        muted = self._ds.get(target.mute_path)
+        if fader is None or muted is None:
             logger.warning("fader_path and mute_path required when pre_fader is False")
             return None
         return float(fader) * float(not muted)
