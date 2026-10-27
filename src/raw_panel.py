@@ -668,7 +668,7 @@ class RawPanel:
         if text1:
             payload["TextLine1"] = text1
         if text2:
-            payload["TextLine1"] = text2
+            payload["TextLine2"] = text2
         if formatting:
             payload["Formatting"] = formatting
         if state_icon:

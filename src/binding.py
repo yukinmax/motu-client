@@ -526,7 +526,7 @@ class PanelController:
         txt = target.text or {}
         return self._panel.hwc_text(
             target.hwcid,
-            value1=db_value,
+            text1=str(db_value),
             **txt,
         )
 
