@@ -343,7 +343,6 @@ class Meters(_Store):
         http: HTTPClient,
         hostname: str,
         port: int,
-        *,
         **kwargs,
     ) -> None:
         super().__init__(http, hostname, port, **kwargs)
