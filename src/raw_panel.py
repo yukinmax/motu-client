@@ -27,16 +27,20 @@ class RawPanel:
         self,
         host: str,
         *,
-        port: int = 9923,
+        port: int,
         mode: str = "ASCII",
-        delay: float = 0.01,
-        idle_sleep: float = 0.1,
-        sleep_timeout_minutes: int = 0,
-        sleep_mode: int = 0,
-        sleep_screen_saver: int = 0,
-        panel_brightness_leds: int = 4,
-        panel_brightness_oleds: int = 2,
-        panel_dimmed_gain: int = 20,
+        delay: float,
+        idle_sleep: float,
+        sleep_timeout_minutes: int,
+        sleep_mode: int,
+        sleep_screen_saver: int,
+        panel_brightness_leds: int,
+        panel_brightness_oleds: int,
+        panel_dimmed_gain: int,
+        connect_retry_interval_sec: float,
+        connect_timeout_sec: float | None,
+        send_timeout_sec: float | None,
+        wakeup_min_interval_sec: float,
     ) -> None:
         self.mode = mode
         self.host = str(host)
@@ -48,6 +52,9 @@ class RawPanel:
         self._reader = None
         self._writer = None
         self._sys_stat = None
+        self.connect_retry_interval_sec = connect_retry_interval_sec
+        self.connect_timeout_sec = connect_timeout_sec
+        self.send_timeout_sec = send_timeout_sec
         self.delay = delay
         self.idle_sleep = idle_sleep
         self.sleep_timeout_ms = sleep_timeout_minutes * 60000
@@ -94,7 +101,7 @@ class RawPanel:
         self._hw_change_buffer = {}
         self.last_activity = 0.0
         self._last_wakeup = 0.0
-        self._wakeup_min_interval = 10.0  # seconds
+        self._wakeup_min_interval = wakeup_min_interval_sec
         self._change_controller = None
         self._feedback_controller = None
 
@@ -228,10 +235,9 @@ class RawPanel:
     async def connect(
         self,
         *,
-        retries: int | None = 20,
-        retry_interval_sec: int | float = 10,
-        timeout: int | float = 10,
+        retries: int | None,
     ) -> None:
+        """Connect to the panel. retries=None retries forever."""
         if self._stopped:
             logger.info("Shutdown is in progress, connect aborted")
             return
@@ -253,7 +259,7 @@ class RawPanel:
                             self.host,
                             self.port,
                         ),
-                        timeout=timeout,
+                        timeout=self.connect_timeout_sec,
                     )
                 except (ConnectionRefusedError, OSError, TimeoutError) as e:
                     logger.warning(
@@ -270,7 +276,7 @@ class RawPanel:
                             self.port,
                         )
                         break
-                    await asyncio.sleep(retry_interval_sec)
+                    await asyncio.sleep(self.connect_retry_interval_sec)
                 else:
                     self._configure_socket(self._writer)
                     self.connected = True
@@ -459,7 +465,7 @@ class RawPanel:
             return states[0]
         return [{"States": states}]
 
-    async def send(self, message: dict | list, *, timeout: int | float = 1) -> None:
+    async def send(self, message: dict | list) -> None:
         if self._stopped:
             return
         if not self.connected:
@@ -475,7 +481,7 @@ class RawPanel:
         logger.debug(payload)
         try:
             self._writer.write(f"{payload}\n".encode("ascii"))
-            await asyncio.wait_for(self._writer.drain(), timeout=timeout)
+            await asyncio.wait_for(self._writer.drain(), timeout=self.send_timeout_sec)
             transport = self._writer.transport
             logger.debug(
                 "write_buf=%s closing=%s",

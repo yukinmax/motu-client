@@ -1,0 +1,106 @@
+# Example configuration for motu-client.
+#
+# Point the application at this file with MOTU_BRIDGE_CONFIG=/path/to/config.toml
+# Every key is optional. Values shown here are the built-in defaults, except
+# the host names, which are placeholders.
+#
+# Priority, highest first:
+#   1. Environment variables named MOTU_BRIDGE_<KEY> (for example MOTU_BRIDGE_API_PORT)
+#   2. This file
+#   3. Built-in defaults
+#
+# Conventions:
+#   - A timeout of 0 means no timeout.
+#   - A retry count of -1 means retry forever, and 0 means do not retry.
+#   - Intervals are in seconds, and 0 means no wait.
+
+# --- Devices and API ---------------------------------------------------------
+
+# MOTU interface host name or IP address, and its HTTP port
+motu_host = "ultralite-avb"
+motu_port = 80
+
+# SKAARHOJ RAW panel host name or IP address
+panel_host = "waveboard"
+
+# SKAARHOJ RAW panel TCP port
+panel_port = 9923
+
+# Address and port the REST API listens on
+api_host = "0.0.0.0"
+api_port = 5000
+
+# CRITICAL, ERROR, WARNING, INFO or DEBUG
+log_level = "INFO"
+
+# --- MOTU HTTP client --------------------------------------------------------
+
+# Seconds to wait for each refresh request to the MOTU, at startup and in the
+# polling loop (0 = no timeout). The MOTU holds a long-poll for about 10 seconds.
+motu_refresh_timeout = 15
+
+# Retries for a failed MOTU refresh request, at startup and in the polling loop
+# (-1 = forever, 0 = do not retry)
+motu_refresh_retries = -1
+
+# Seconds to wait for a write to the MOTU to complete (0 = no timeout), and how
+# many times to retry a failed write
+motu_mutate_timeout = 2
+motu_mutate_retries = 0
+
+# Seconds between retries of a failed MOTU request
+motu_retry_interval = 10
+
+# Maximum simultaneous HTTP connections to the MOTU
+motu_connector_limit = 10
+
+# Seconds between meter polls while all meters are silent
+meters_idle_interval = 0.2
+
+# --- Panel connection --------------------------------------------------------
+
+# Retries of the first panel connection at startup before startup continues
+# (-1 = wait for the panel). The panel is then reconnected in the background,
+# forever, whenever the connection is down. Also: seconds between attempts, and
+# seconds to wait for each attempt (0 = no timeout).
+panel_connect_retries = 20
+panel_connect_retry_interval = 10
+panel_connect_timeout = 10
+
+# Seconds to wait for a message to be written to the panel (0 = no timeout)
+panel_send_timeout = 1
+
+# Minimum seconds between wake-up commands sent to the panel
+panel_wakeup_min_interval = 10
+
+# --- Panel behavior ----------------------------------------------------------
+
+# Seconds a hardware change is buffered before it is processed
+panel_delay = 0.001
+
+# Seconds to wait between checks when no hardware changes are buffered
+panel_idle_sleep = 0.1
+
+# Panel sleep timeout in minutes (0 keeps the panel's own default)
+panel_sleep_timeout_minutes = 10
+
+# Sleep mode: 0 animates the LEDs, 1 turns the buttons off
+panel_sleep_mode = 0
+
+# Screen saver: 0 wake up on key press, 1 Sheep And Goats, 2 Save The Oleds, 3 Just Dimmed
+panel_sleep_screen_saver = 0
+
+# LED and OLED brightness (0-8)
+panel_brightness_leds = 4
+panel_brightness_oleds = 2
+
+# Gain used while the panel is dimmed (1-64, 64 is full gain)
+panel_dimmed_gain = 20
+
+# --- Server lifecycle --------------------------------------------------------
+
+# Seconds the server waits for application startup to finish (0 = no timeout)
+startup_timeout = 500
+
+# Seconds background tasks get to finish on shutdown
+shutdown_timeout = 5

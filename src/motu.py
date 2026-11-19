@@ -15,13 +15,6 @@ logger = logging.getLogger(__name__)
 
 LEVEL_RANGE = (0, 10 ** (12 / 20))
 
-# Motu long-poll hold is ~10s; client timeout slightly above that.
-DEFAULT_POLL_TIMEOUT_SEC = 15
-DEFAULT_MUTATE_TIMEOUT_SEC = 2
-DEFAULT_MUTATE_RETRIES = 0
-DEFAULT_RETRY_INTERVAL_SEC = 10
-DEFAULT_HOSTNAME = "ultralite-avb.local"
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,8 +71,8 @@ class HTTPClient:
     def __init__(
         self,
         *,
-        retry_interval_sec: float = DEFAULT_RETRY_INTERVAL_SEC,
-        connector_limit: int = 10,
+        retry_interval_sec: float,
+        connector_limit: int,
     ) -> None:
         self._retry_interval_sec = retry_interval_sec
         self._connector_limit = connector_limit
@@ -179,13 +172,20 @@ class _Store:
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str = DEFAULT_HOSTNAME,
+        hostname: str,
+        port: int,
         *,
-        poll_timeout: float = DEFAULT_POLL_TIMEOUT_SEC,
+        refresh_timeout: float | None,
+        refresh_retries: int | None,
     ) -> None:
+        """Timeout and retries apply to every refresh() request, both the
+        initial one at startup and those made by poll(). None means no
+        timeout / unlimited retries."""
         self.http = http
         self.hostname = hostname
-        self.poll_timeout = poll_timeout
+        self.port = port
+        self.refresh_timeout = refresh_timeout
+        self.refresh_retries = refresh_retries
         self.base_path = ""
         self.refresh_params: dict | None = None
         self.etag: str | None = None
@@ -199,7 +199,7 @@ class _Store:
         return False
 
     def _url(self) -> str:
-        return f"http://{self.hostname}/{self.base_path}"
+        return f"http://{self.hostname}:{self.port}/{self.base_path}"
 
     def stop(self) -> None:
         """Signal poll loops to exit on next iteration."""
@@ -220,7 +220,8 @@ class _Store:
             self._url(),
             params=params,
             etag=self.etag,
-            timeout=self.poll_timeout,
+            retries=self.refresh_retries,
+            timeout=self.refresh_timeout,
         )
         if response is None:
             logger.debug("Not modified: %s", self.base_path)
@@ -260,7 +261,9 @@ class _Store:
         handle_changes: bool = True,
         idle_interval: float = 0.0,
     ) -> None:
-        logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
+        logger.info(
+            "Polling MOTU %s (%s:%s)...", self.base_path, self.hostname, self.port
+        )
         while not self._stopped:
             try:
                 started = time.perf_counter()
@@ -274,9 +277,10 @@ class _Store:
             except asyncio.CancelledError:
                 break
         logger.info(
-            "Stopped polling MOTU %s (%s)",
+            "Stopped polling MOTU %s (%s:%s)",
             self.base_path,
             self.hostname,
+            self.port,
         )
 
     def set_change_controller(self, controller: Any) -> None:
@@ -288,10 +292,16 @@ class DataStore(_Store):
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str | None = None,
+        hostname: str,
+        port: int,
+        *,
+        mutate_timeout: float | None,
+        mutate_retries: int,
         **kwargs,
     ) -> None:
-        super().__init__(http, hostname or DEFAULT_HOSTNAME, **kwargs)
+        super().__init__(http, hostname, port, **kwargs)
+        self.mutate_timeout = mutate_timeout
+        self.mutate_retries = mutate_retries
         self.base_path = "datastore"
         self.client_id = generate_client_id()
 
@@ -304,8 +314,8 @@ class DataStore(_Store):
             params={"client": self.client_id},
             method="PATCH",
             data=data,
-            retries=DEFAULT_MUTATE_RETRIES,
-            timeout=DEFAULT_MUTATE_TIMEOUT_SEC,
+            retries=self.mutate_retries,
+            timeout=self.mutate_timeout,
         )
         # 204 has no body, so the sent value is the result. 200 is accepted
         # the same way: request() only returns for 200/204.
@@ -331,10 +341,12 @@ class Meters(_Store):
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str | None = None,
+        hostname: str,
+        port: int,
+        *,
         **kwargs,
     ) -> None:
-        super().__init__(http, hostname or DEFAULT_HOSTNAME, **kwargs)
+        super().__init__(http, hostname, port, **kwargs)
         self.base_path = "meters"
         self.refresh_params = {"meters": "mix/level"}
         self.client_id = generate_client_id()

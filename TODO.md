@@ -18,6 +18,6 @@ Roadmap for [motu-client](README.md).
 - [x] Handle panel disconnect
 - [x] Implement appropriate application shutdown without any leaking resources
 - [x] Create Dockerfile and streamline the deployment
-- [ ] Implement config file
+- [x] Implement config file
 - [ ] Decouple API service, MOTU connection handling and Skaarhoj Panel connection handling
 - [x] Replace requests with aiohttp

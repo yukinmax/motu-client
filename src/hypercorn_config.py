@@ -1,13 +1,14 @@
-"""Hypercorn config. Reads LOG_LEVEL because the server sets its own level
-after the app is imported, which overwrites anything api.py does."""
+"""Hypercorn config, loaded with --config file:hypercorn_config.py.
 
-import os
+Run Hypercorn as `python -m hypercorn` from this directory so that the
+settings module is importable.
+"""
 
-_VALID = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
-_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
-loglevel = _name if _name in _VALID else "INFO"
+from settings import settings
 
-startup_timeout = 500
+bind = [f"{settings.api_host}:{settings.api_port}"]
+loglevel = settings.log_level
+startup_timeout = settings.startup_timeout
 
 logconfig_dict = {
     "version": 1,
