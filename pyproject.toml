@@ -2,6 +2,7 @@
 name = "motu-client"
 version = "0.4.1"
 requires-python = ">=3.11"
+license = "AGPL-3.0-only"
 dependencies = [
     "aiohttp>=3.9.0",
     "aioprometheus[quart]>=23.12.0",

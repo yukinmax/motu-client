@@ -246,3 +246,9 @@ Prometheus metrics are exposed at `GET /metrics` using the [aioprometheus](https
 ## Roadmap
 
 Planned and completed work is tracked in [TODO.md](TODO.md).
+
+## License
+
+Copyright (C) 2020-present Maxim Yukin
+
+This project is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE) for the full text. If you run a modified version as a network service, you must offer its source code to the users of that service.
