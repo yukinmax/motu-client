@@ -1,12 +1,16 @@
 [project]
 name = "motu-client"
-version = "0.4.1"
+version = "0.5.0"
+description = "Bridge between a SKAARHOJ RAW panel and a MOTU AVB audio interface, with a REST API and Prometheus metrics"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "AGPL-3.0-only"
 dependencies = [
     "aiohttp>=3.9.0",
     "aioprometheus[quart]>=23.12.0",
-    "bidict>=0.24.1",
     "hypercorn>=0.18.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.6.0",
     "quart>=0.22.0",
 ]
 
@@ -20,4 +24,4 @@ src = ["src"]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "UP"]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "RET", "RUF"]

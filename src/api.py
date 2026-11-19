@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 
 from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
@@ -10,42 +9,58 @@ import binding
 import mappings
 import motu
 import raw_panel
-
-_VALID_LOG_LEVELS = {
-    "CRITICAL": logging.CRITICAL,
-    "ERROR": logging.ERROR,
-    "WARNING": logging.WARNING,
-    "INFO": logging.INFO,
-    "DEBUG": logging.DEBUG,
-}
-
-log_level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
-if log_level_name in _VALID_LOG_LEVELS:
-    log_level = _VALID_LOG_LEVELS[log_level_name]
-else:
-    log_level = logging.INFO
+from settings import settings
 
 logging.basicConfig(
-    level=log_level,
+    level=settings.log_level,
     format="%(levelname)s [%(name)s] %(message)s",
 )
 
 logger = logging.getLogger(__name__)
-
-if log_level_name not in _VALID_LOG_LEVELS:
-    logger.warning("Invalid LOG_LEVEL=%r; falling back to INFO", log_level_name)
-elif log_level_name != "INFO":
-    logger.log(log_level, "Log level set to %s", log_level_name)
+if settings.log_level != "INFO":
+    logger.log(
+        logging.getLevelNamesMapping()[settings.log_level],
+        "Log level set to %s",
+        settings.log_level,
+    )
 
 app = Quart("MOTU API")
-app.config["BACKGROUND_TASK_SHUTDOWN_TIMEOUT"] = 5
-motu_http_client = motu.HTTPClient()
-motu_ds = motu.DataStore(motu_http_client, "ultralite-avb.ynet")
-motu_ms = motu.Meters(motu_http_client, "ultralite-avb.ynet")
+app.config["BACKGROUND_TASK_SHUTDOWN_TIMEOUT"] = settings.shutdown_timeout
+motu_http_client = motu.HTTPClient(
+    retry_interval=settings.motu_retry_interval,
+    connector_limit=settings.motu_connector_limit,
+)
+motu_ds = motu.DataStore(
+    motu_http_client,
+    host=settings.motu_host,
+    port=settings.motu_port,
+    refresh_timeout=settings.motu_refresh_timeout,
+    refresh_retries=settings.motu_refresh_retries,
+    mutate_timeout=settings.motu_mutate_timeout,
+    mutate_retries=settings.motu_mutate_retries,
+)
+motu_ms = motu.Meters(
+    motu_http_client,
+    host=settings.motu_host,
+    port=settings.motu_port,
+    refresh_timeout=settings.motu_refresh_timeout,
+    refresh_retries=settings.motu_refresh_retries,
+)
 skaarhoj_panel = raw_panel.RawPanel(
-    "waveboard.ynet",
-    delay=0.001,
-    sleep_timeout_minutes=10,
+    host=settings.panel_host,
+    port=settings.panel_port,
+    delay=settings.panel_delay,
+    idle_sleep=settings.panel_idle_sleep,
+    sleep_timeout=settings.panel_sleep_timeout,
+    sleep_mode=settings.panel_sleep_mode,
+    sleep_screen_saver=settings.panel_sleep_screen_saver,
+    panel_brightness_leds=settings.panel_brightness_leds,
+    panel_brightness_oleds=settings.panel_brightness_oleds,
+    panel_dimmed_gain=settings.panel_dimmed_gain,
+    connect_retry_interval=settings.panel_connect_retry_interval,
+    connect_timeout=settings.panel_connect_timeout,
+    send_timeout=settings.panel_send_timeout,
+    wakeup_min_interval=settings.panel_wakeup_min_interval,
 )
 
 control_map = binding.ControlMap.from_raw(mappings.control_map)
@@ -83,11 +98,11 @@ async def startup() -> None:
     await motu_ds.refresh(handle_changes=False)
     await motu_ms.refresh(handle_changes=False)
     logger.info("Initial data refresh has completed")
-    await skaarhoj_panel.connect()
+    await skaarhoj_panel.connect(retries=settings.panel_connect_retries)
     app.add_background_task(skaarhoj_panel.handle_requests)
     app.add_background_task(skaarhoj_panel.process_buffers)
     app.add_background_task(motu_ds.poll, diff_check=False)
-    app.add_background_task(motu_ms.poll, idle_interval=0.2)
+    app.add_background_task(motu_ms.poll, idle_interval=settings.meters_idle_interval)
 
 
 @app.after_serving
@@ -211,4 +226,4 @@ async def mix_send_level_set() -> str:
 
 
 if __name__ == "__main__":
-    app.run(port="5088")
+    app.run(host=settings.api_host, port=settings.api_port)

@@ -25,18 +25,22 @@ def normalize_hwc_value(value: str) -> str:
 class RawPanel:
     def __init__(
         self,
-        host: str,
         *,
-        port: int = 9923,
+        host: str,
+        port: int,
         mode: str = "ASCII",
-        delay: float = 0.01,
-        idle_sleep: float = 0.1,
-        sleep_timeout_minutes: int = 0,
-        sleep_mode: int = 0,
-        sleep_screen_saver: int = 0,
-        panel_brightness_leds: int = 4,
-        panel_brightness_oleds: int = 2,
-        panel_dimmed_gain: int = 20,
+        delay: float,
+        idle_sleep: float,
+        sleep_timeout: int,
+        sleep_mode: int,
+        sleep_screen_saver: int,
+        panel_brightness_leds: int,
+        panel_brightness_oleds: int,
+        panel_dimmed_gain: int,
+        connect_retry_interval: float,
+        connect_timeout: float | None,
+        send_timeout: float | None,
+        wakeup_min_interval: float,
     ) -> None:
         self.mode = mode
         self.host = str(host)
@@ -48,9 +52,12 @@ class RawPanel:
         self._reader = None
         self._writer = None
         self._sys_stat = None
+        self.connect_retry_interval = connect_retry_interval
+        self.connect_timeout = connect_timeout
+        self.send_timeout = send_timeout
         self.delay = delay
         self.idle_sleep = idle_sleep
-        self.sleep_timeout_ms = sleep_timeout_minutes * 60000
+        self.sleep_timeout_ms = sleep_timeout * 1000
         self.sleep_mode = sleep_mode
         self.sleep_screen_saver = sleep_screen_saver
         self.info = {
@@ -94,7 +101,7 @@ class RawPanel:
         self._hw_change_buffer = {}
         self.last_activity = 0.0
         self._last_wakeup = 0.0
-        self._wakeup_min_interval = 10.0  # seconds
+        self._wakeup_min_interval = wakeup_min_interval
         self._change_controller = None
         self._feedback_controller = None
 
@@ -228,10 +235,9 @@ class RawPanel:
     async def connect(
         self,
         *,
-        retries: int | None = 20,
-        retry_interval_sec: int | float = 10,
-        timeout: int | float = 10,
+        retries: int | None,
     ) -> None:
+        """Connect to the panel. retries=None retries forever."""
         if self._stopped:
             logger.info("Shutdown is in progress, connect aborted")
             return
@@ -253,9 +259,9 @@ class RawPanel:
                             self.host,
                             self.port,
                         ),
-                        timeout=timeout,
+                        timeout=self.connect_timeout,
                     )
-                except (ConnectionRefusedError, OSError, TimeoutError) as e:
+                except OSError as e:  # includes ConnectionError and TimeoutError
                     logger.warning(
                         "Connection to %s:%s failed (%s)",
                         self.host,
@@ -270,7 +276,7 @@ class RawPanel:
                             self.port,
                         )
                         break
-                    await asyncio.sleep(retry_interval_sec)
+                    await asyncio.sleep(self.connect_retry_interval)
                 else:
                     self._configure_socket(self._writer)
                     self.connected = True
@@ -329,7 +335,7 @@ class RawPanel:
                 try:
                     writer.close()
                     await asyncio.wait_for(writer.wait_closed(), timeout=2)
-                except (TimeoutError, ConnectionResetError, OSError) as e:
+                except OSError as e:
                     logger.warning(
                         "Can't close the connection gracefully (%s); "
                         "aborting transport",
@@ -381,12 +387,11 @@ class RawPanel:
             if not len(request):
                 logger.debug("Request is empty line")
                 return
-            elif request == "nack":
+            if request == "nack":
                 logger.warning("Request is 'nack'")
                 return
-            else:
-                logger.warning("Invalid request: %s", request)
-                return
+            logger.warning("Invalid request: %s", request)
+            return
         try:
             command, hwcid = key.split("#")
         except ValueError:
@@ -432,7 +437,10 @@ class RawPanel:
                 if r is None:
                     await asyncio.sleep(0.1)
                     continue
-                await self.handle_request(r)
+                try:
+                    await self.handle_request(r)
+                except Exception:
+                    logger.exception("Failed to handle panel message: %s", r)
             except asyncio.CancelledError:
                 break
         logger.info("Requests from the panel are not handled anymore")
@@ -459,12 +467,12 @@ class RawPanel:
             return states[0]
         return [{"States": states}]
 
-    async def send(self, message: dict | list, *, timeout: int | float = 1) -> None:
+    async def send(self, message: dict | list) -> None:
         if self._stopped:
             return
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while not self._stopped and (
+        while not self._stopped and (  # noqa: ASYNC110
             self._connection_in_progress or self._disconnect_in_progress
         ):
             await asyncio.sleep(0.1)
@@ -472,17 +480,17 @@ class RawPanel:
             return
 
         payload = json.dumps(message, separators=(",", ":"))
-        logger.debug(payload)
+        logger.debug("%s", payload)
         try:
             self._writer.write(f"{payload}\n".encode("ascii"))
-            await asyncio.wait_for(self._writer.drain(), timeout=timeout)
+            await asyncio.wait_for(self._writer.drain(), timeout=self.send_timeout)
             transport = self._writer.transport
             logger.debug(
                 "write_buf=%s closing=%s",
                 transport.get_write_buffer_size(),
                 self._writer.is_closing(),
             )
-        except (ConnectionResetError, OSError, TimeoutError) as e:
+        except OSError as e:
             logger.warning(
                 "Message was not delivered: %s (%s)",
                 payload,
@@ -496,7 +504,7 @@ class RawPanel:
             return None
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while not self._stopped and (
+        while not self._stopped and (  # noqa: ASYNC110
             self._connection_in_progress or self._disconnect_in_progress
         ):
             await asyncio.sleep(0.1)
@@ -504,7 +512,7 @@ class RawPanel:
             return None
         try:
             raw_record = await self._reader.readline()
-        except (ConnectionResetError, OSError, TimeoutError) as e:
+        except OSError as e:
             logger.warning(
                 "Panel read failed/timed out (%s)",
                 type(e).__name__,
@@ -524,7 +532,7 @@ class RawPanel:
         except UnicodeDecodeError:
             logger.warning("Undecodable panel data: %r", raw_record)
             return None
-        logger.debug(record)
+        logger.debug("%s", record)
         return record
 
     # TODO: Refactor message building logic

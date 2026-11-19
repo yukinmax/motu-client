@@ -15,13 +15,6 @@ logger = logging.getLogger(__name__)
 
 LEVEL_RANGE = (0, 10 ** (12 / 20))
 
-# Motu long-poll hold is ~10s; client timeout slightly above that.
-DEFAULT_POLL_TIMEOUT_SEC = 15
-DEFAULT_MUTATE_TIMEOUT_SEC = 2
-DEFAULT_MUTATE_RETRIES = 0
-DEFAULT_RETRY_INTERVAL_SEC = 10
-DEFAULT_HOSTNAME = "ultralite-avb.local"
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -61,7 +54,7 @@ def generate_client_id() -> int:
 
 @dataclass(slots=True)
 class _HttpResult:
-    """Minimal response shape used by _Store / DataStore."""
+    """Minimal response shape used by _Store / DataStore. 304 has no body."""
 
     status_code: int
     reason: str | None
@@ -78,10 +71,10 @@ class HTTPClient:
     def __init__(
         self,
         *,
-        retry_interval_sec: float = DEFAULT_RETRY_INTERVAL_SEC,
-        connector_limit: int = 10,
+        retry_interval: float,
+        connector_limit: int,
     ) -> None:
-        self._retry_interval_sec = retry_interval_sec
+        self._retry_interval = retry_interval
         self._connector_limit = connector_limit
         self._session: aiohttp.ClientSession | None = None
 
@@ -121,8 +114,16 @@ class HTTPClient:
         method: str = "GET",
         data: bytes | str | None = None,
         retries: int | None = None,
-        timeout: float | None = None,
+        attempt_timeout: float | None = None,
     ) -> _HttpResult | None:
+        """Send a request, retrying failed attempts.
+
+        Returns the result for 200 and 204, and for 304 (not modified, with no
+        body). Returns None when the request failed: any other status or a
+        connection error or timeout counts as a failed attempt, which is retried
+        up to `retries` times (None retries forever) with `retry_interval`
+        seconds between attempts. Retries never send the ETag.
+        """
         if not self.started:
             logger.error("HTTP request attempted before session start: %s", url)
             return None
@@ -133,7 +134,7 @@ class HTTPClient:
         if method.upper() == "PATCH":
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        client_timeout = aiohttp.ClientTimeout(total=attempt_timeout)
         attempt = 0
 
         while True:
@@ -150,42 +151,46 @@ class HTTPClient:
                 ) as resp:
                     status = resp.status
                     reason = resp.reason
-                    etag = resp.headers.get("ETag")  # case-insensitive
+                    resp_etag = resp.headers.get("ETag")  # case-insensitive
 
-                    if status in (200, 204):
+                    if status in (200, 204, 304):
                         body = None
                         if status == 200:
                             body = await resp.json(content_type=None)
-                        return _HttpResult(status, reason, etag, body)
-
-                    if status != 304:
-                        logger.error("Error code %s - %s", status, reason)
-                    return None
-
+                        return _HttpResult(status, reason, resp_etag, body)
+                    failure = f"HTTP {status} {reason}"
             except (aiohttp.ClientError, TimeoutError) as e:
-                logger.warning(
-                    "Request to %s failed (%s)",
-                    url,
-                    type(e).__name__,
-                )
+                failure = type(e).__name__
                 logger.debug("%s", e)
-                if retries is not None and attempt > retries:
-                    logger.error("Maximum retries reached for %s", url)
-                    return None
-                await asyncio.sleep(self._retry_interval_sec)
+
+            logger.warning("Request to %s failed (%s)", url, failure)
+            # The MOTU resets its ETag sequence on reboot, so a stale ETag can
+            # keep failing. Retry without it to fetch the full state.
+            headers.pop("If-None-Match", None)
+            if retries is not None and attempt > retries:
+                logger.error("Maximum retries reached for %s", url)
+                return None
+            await asyncio.sleep(self._retry_interval)
 
 
 class _Store:
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str = DEFAULT_HOSTNAME,
         *,
-        poll_timeout: float = DEFAULT_POLL_TIMEOUT_SEC,
+        host: str,
+        port: int,
+        refresh_timeout: float | None,
+        refresh_retries: int | None,
     ) -> None:
+        """Timeout and retries apply to every refresh() request, both the
+        initial one at startup and those made by poll(). None means no
+        timeout / unlimited retries."""
         self.http = http
-        self.hostname = hostname
-        self.poll_timeout = poll_timeout
+        self.host = host
+        self.port = port
+        self.refresh_timeout = refresh_timeout
+        self.refresh_retries = refresh_retries
         self.base_path = ""
         self.refresh_params: dict | None = None
         self.etag: str | None = None
@@ -199,7 +204,7 @@ class _Store:
         return False
 
     def _url(self) -> str:
-        return f"http://{self.hostname}/{self.base_path}"
+        return f"http://{self.host}:{self.port}/{self.base_path}"
 
     def stop(self) -> None:
         """Signal poll loops to exit on next iteration."""
@@ -220,17 +225,18 @@ class _Store:
             self._url(),
             params=params,
             etag=self.etag,
-            timeout=self.poll_timeout,
+            retries=self.refresh_retries,
+            attempt_timeout=self.refresh_timeout,
         )
         if response is None:
+            self.etag = None
+            return None
+        if response.status_code == 304:
             logger.debug("Not modified: %s", self.base_path)
             return None
 
         payload = response.json() or {}
-        if diff_check:
-            data_diff = dict_diff(self.data, payload)
-        else:
-            data_diff = payload
+        data_diff = dict_diff(self.data, payload) if diff_check else payload
 
         etag = response.etag
         if etag:
@@ -260,7 +266,7 @@ class _Store:
         handle_changes: bool = True,
         idle_interval: float = 0.0,
     ) -> None:
-        logger.info("Polling MOTU %s (%s)...", self.base_path, self.hostname)
+        logger.info("Polling MOTU %s (%s:%s)...", self.base_path, self.host, self.port)
         while not self._stopped:
             try:
                 started = time.perf_counter()
@@ -274,9 +280,10 @@ class _Store:
             except asyncio.CancelledError:
                 break
         logger.info(
-            "Stopped polling MOTU %s (%s)",
+            "Stopped polling MOTU %s (%s:%s)",
             self.base_path,
-            self.hostname,
+            self.host,
+            self.port,
         )
 
     def set_change_controller(self, controller: Any) -> None:
@@ -288,10 +295,23 @@ class DataStore(_Store):
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str | None = None,
-        **kwargs,
+        *,
+        host: str,
+        port: int,
+        refresh_timeout: float | None,
+        refresh_retries: int | None,
+        mutate_timeout: float | None,
+        mutate_retries: int | None,
     ) -> None:
-        super().__init__(http, hostname or DEFAULT_HOSTNAME, **kwargs)
+        super().__init__(
+            http,
+            host=host,
+            port=port,
+            refresh_timeout=refresh_timeout,
+            refresh_retries=refresh_retries,
+        )
+        self.mutate_timeout = mutate_timeout
+        self.mutate_retries = mutate_retries
         self.base_path = "datastore"
         self.client_id = generate_client_id()
 
@@ -304,8 +324,8 @@ class DataStore(_Store):
             params={"client": self.client_id},
             method="PATCH",
             data=data,
-            retries=DEFAULT_MUTATE_RETRIES,
-            timeout=DEFAULT_MUTATE_TIMEOUT_SEC,
+            retries=self.mutate_retries,
+            attempt_timeout=self.mutate_timeout,
         )
         # 204 has no body, so the sent value is the result. 200 is accepted
         # the same way: request() only returns for 200/204.
@@ -331,10 +351,19 @@ class Meters(_Store):
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str | None = None,
-        **kwargs,
+        *,
+        host: str,
+        port: int,
+        refresh_timeout: float | None,
+        refresh_retries: int | None,
     ) -> None:
-        super().__init__(http, hostname or DEFAULT_HOSTNAME, **kwargs)
+        super().__init__(
+            http,
+            host=host,
+            port=port,
+            refresh_timeout=refresh_timeout,
+            refresh_retries=refresh_retries,
+        )
         self.base_path = "meters"
         self.refresh_params = {"meters": "mix/level"}
         self.client_id = generate_client_id()
@@ -361,7 +390,9 @@ class Meters(_Store):
         if not filtered_data:
             return {}
         peaks = {
-            "mix/level/peaks": [max(values) for values in zip(*filtered_data.values())]
+            "mix/level/peaks": [
+                max(values) for values in zip(*filtered_data.values(), strict=True)
+            ]
         }
         self.data.update(peaks)
         logger.debug("Modified: %s -> %s", self.base_path, peaks)
