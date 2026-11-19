@@ -39,13 +39,13 @@ OVERRIDE_DISABLED = -1.0
 # Panel raw ↔ Motu dB.
 FADERS_RANGE_MAPPING = (
     (0, -math.inf),
-    ((1, 5), (-120, -60)),
+    ((1, 5), (motu.MIN_DB, -60)),
     ((5, 125), (-60, -30)),
-    ((125, 1000), (-30, 12)),
+    ((125, 1000), (-30, motu.MAX_DB)),
 )
 METERS_RANGE_MAPPING = (
     (0, -math.inf),
-    ((1, 1000), (-60, 12)),
+    ((1, 1000), (-60, motu.MAX_DB)),
 )
 
 _PATH_ROLE_RE = re.compile(r"(\w+)/?(\d*)$")
@@ -125,7 +125,7 @@ def kind_from_name(name: str) -> str:
         return "fader"
     if name == "display":
         return "display"
-    if name.startswith("display") and name[7:].isdigit():
+    if name.startswith("display") and name.removeprefix("display").isdigit():
         return "meter"
     return "unknown"
 
@@ -433,7 +433,7 @@ class PanelController:
         for path in self._map:
             v = self._ds.get(path)
             if v is None:
-                for i in [str(s) for s in range(15)] + ["peaks"]:
+                for i in [str(s) for s in range(motu.METER_SLOTS)] + ["peaks"]:
                     m_path = f"{path}/{i}"
                     v = self._ms.get(m_path)
                     if v is None:
@@ -604,8 +604,8 @@ class PanelController:
             return None
 
     def _meter_level_to_raw(self, value: int, *, multiplier: float = 1.0) -> int:
-        """Meter sample (0-1000 scale) → panel raw."""
-        linear = value * multiplier / 1000
+        """Meter sample (0 to METER_SCALE) → panel raw."""
+        linear = value * multiplier / motu.METER_SCALE
         db = motu.level_to_db(linear)
         return db_to_raw(db, self._meters_range_mapping)
 

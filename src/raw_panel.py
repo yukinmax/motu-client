@@ -12,6 +12,20 @@ from binding import SOURCE_RAW_PANEL
 
 logger = logging.getLogger(__name__)
 
+_STATE_POLL_INTERVAL = 0.1  # seconds between checks while waiting for the panel
+_WAKE_FEEDBACK_DELAY = 1.0  # seconds to let the panel settle after waking up
+_CLOSE_TIMEOUT = 2  # seconds to wait for a graceful disconnect
+
+# TCP keepalive: a dead connection is detected in about 19 s
+# (_KEEPALIVE_IDLE + _KEEPALIVE_INTERVAL * _KEEPALIVE_COUNT).
+_KEEPALIVE_IDLE = 10
+_KEEPALIVE_INTERVAL = 3
+_KEEPALIVE_COUNT = 3
+_USER_TIMEOUT_MS = 10_000  # unacknowledged data closes the connection after this
+
+# HWCExtended Interpretation value for fader position.
+_FADER_INTERPRETATION = 5
+
 
 def normalize_hwc_value(value: str) -> str:
     """Panel protocol: strip optional prefix ('State:Down' → 'Down')."""
@@ -146,7 +160,7 @@ class RawPanel:
         self.info["isSleeping"] = new_state
         if not new_state and (prev_state or prev_state is None):
             # Init feedback only after panel wakes up or initializes
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(_WAKE_FEEDBACK_DELAY)
             if self._feedback_controller is not None:
                 await self._feedback_controller.init_feedback()
 
@@ -205,16 +219,22 @@ class RawPanel:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             # Linux; ignore if unsupported (e.g. some non-Linux builds)
             if hasattr(socket, "TCP_KEEPIDLE"):
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+                sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, _KEEPALIVE_IDLE
+                )
             if hasattr(socket, "TCP_KEEPINTVL"):
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
+                sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, _KEEPALIVE_INTERVAL
+                )
             if hasattr(socket, "TCP_KEEPCNT"):
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+                sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPCNT, _KEEPALIVE_COUNT
+                )
             if hasattr(socket, "TCP_USER_TIMEOUT"):
                 sock.setsockopt(
                     socket.IPPROTO_TCP,
                     socket.TCP_USER_TIMEOUT,
-                    10_000,
+                    _USER_TIMEOUT_MS,
                 )
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         except OSError as e:
@@ -334,7 +354,7 @@ class RawPanel:
             if writer is not None:
                 try:
                     writer.close()
-                    await asyncio.wait_for(writer.wait_closed(), timeout=2)
+                    await asyncio.wait_for(writer.wait_closed(), timeout=_CLOSE_TIMEOUT)
                 except OSError as e:
                     logger.warning(
                         "Can't close the connection gracefully (%s); "
@@ -435,7 +455,7 @@ class RawPanel:
             try:
                 r = await self.receive()
                 if r is None:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(_STATE_POLL_INTERVAL)
                     continue
                 try:
                     await self.handle_request(r)
@@ -475,7 +495,7 @@ class RawPanel:
         while not self._stopped and (  # noqa: ASYNC110
             self._connection_in_progress or self._disconnect_in_progress
         ):
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(_STATE_POLL_INTERVAL)
         if self._stopped or not self.connected or self._writer is None:
             return
 
@@ -507,7 +527,7 @@ class RawPanel:
         while not self._stopped and (  # noqa: ASYNC110
             self._connection_in_progress or self._disconnect_in_progress
         ):
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(_STATE_POLL_INTERVAL)
         if self._stopped or not self.connected or self._reader is None:
             return None
         try:
@@ -619,7 +639,7 @@ class RawPanel:
 
     def hwc_fader(self, hwcid: int, value: int | None) -> dict:
         """Fader position message. A missing value is 0."""
-        payload = {"Interpretation": 5}
+        payload = {"Interpretation": _FADER_INTERPRETATION}
         if value:
             payload["Value"] = value
         return {"HWCIDs": [hwcid], "HWCExtended": payload}
