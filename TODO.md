@@ -1,6 +1,6 @@
 # TODO
 
-Roadmap for [motu-client](README.md).
+Roadmap for [motu-bridge](README.md).
 
 - [x] Fix the panel crash caused by meters feedback
 - [x] Re-send relevant feedback to panel after it wakes up

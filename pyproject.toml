@@ -1,5 +1,5 @@
 [project]
-name = "motu-client"
+name = "motu-bridge"
 version = "0.5.1"
 description = "Bridge between a SKAARHOJ RAW panel and a MOTU AVB audio interface, with a REST API and Prometheus metrics"
 readme = "README.md"
