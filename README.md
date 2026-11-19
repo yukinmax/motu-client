@@ -179,7 +179,17 @@ docker run --rm -p 5000:5000 \
 
 The file must be readable by the container user (UID 8888). Environment variables passed with `-e` still override values from the file.
 
-Bare host names such as the default `ultralite-avb` and `waveboard` are resolved through the DNS search domain. The container inherits the host's `resolv.conf`, so a name resolves in the container only if it resolves on the host. If the names do not resolve, use IP addresses or override them with `MOTU_BRIDGE_MOTU_HOST` and `MOTU_BRIDGE_PANEL_HOST`.
+Bare host names such as the default `ultralite-avb` and `waveboard` can resolve on the Docker host but not inside the container. Docker cannot use the host's systemd-resolved stub (`127.0.0.53`), so it falls back to the upstream DNS servers, which often do not include the host's DNS search domain. Compose networks use Docker's embedded DNS (`127.0.0.11`). If the names do not resolve in the container, either:
+
+- Use fully qualified host names (or IP addresses) in `MOTU_BRIDGE_MOTU_HOST` and `MOTU_BRIDGE_PANEL_HOST`, or in the `motu_host` and `panel_host` keys of the config file
+- Add the search domain to the container with `dns_search` in the Compose service (`--dns-search` with `docker run`)
+
+```yaml
+services:
+  motu-client:
+    dns_search:
+      - example.lan
+```
 
 ### Local
 
