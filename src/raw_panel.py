@@ -387,12 +387,11 @@ class RawPanel:
             if not len(request):
                 logger.debug("Request is empty line")
                 return
-            elif request == "nack":
+            if request == "nack":
                 logger.warning("Request is 'nack'")
                 return
-            else:
-                logger.warning("Invalid request: %s", request)
-                return
+            logger.warning("Invalid request: %s", request)
+            return
         try:
             command, hwcid = key.split("#")
         except ValueError:
@@ -470,7 +469,7 @@ class RawPanel:
             return
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while not self._stopped and (
+        while not self._stopped and (  # noqa: ASYNC110
             self._connection_in_progress or self._disconnect_in_progress
         ):
             await asyncio.sleep(0.1)
@@ -502,7 +501,7 @@ class RawPanel:
             return None
         if not self.connected:
             await self.connect(retries=None)  # Infinite reconnect
-        while not self._stopped and (
+        while not self._stopped and (  # noqa: ASYNC110
             self._connection_in_progress or self._disconnect_in_progress
         ):
             await asyncio.sleep(0.1)

@@ -114,7 +114,7 @@ class HTTPClient:
         method: str = "GET",
         data: bytes | str | None = None,
         retries: int | None = None,
-        timeout: float | None = None,
+        attempt_timeout: float | None = None,
     ) -> _HttpResult | None:
         if not self.started:
             logger.error("HTTP request attempted before session start: %s", url)
@@ -126,7 +126,7 @@ class HTTPClient:
         if method.upper() == "PATCH":
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-        client_timeout = aiohttp.ClientTimeout(total=timeout)
+        client_timeout = aiohttp.ClientTimeout(total=attempt_timeout)
         attempt = 0
 
         while True:
@@ -221,17 +221,14 @@ class _Store:
             params=params,
             etag=self.etag,
             retries=self.refresh_retries,
-            timeout=self.refresh_timeout,
+            attempt_timeout=self.refresh_timeout,
         )
         if response is None:
             logger.debug("Not modified: %s", self.base_path)
             return None
 
         payload = response.json() or {}
-        if diff_check:
-            data_diff = dict_diff(self.data, payload)
-        else:
-            data_diff = payload
+        data_diff = dict_diff(self.data, payload) if diff_check else payload
 
         etag = response.etag
         if etag:
@@ -315,7 +312,7 @@ class DataStore(_Store):
             method="PATCH",
             data=data,
             retries=self.mutate_retries,
-            timeout=self.mutate_timeout,
+            attempt_timeout=self.mutate_timeout,
         )
         # 204 has no body, so the sent value is the result. 200 is accepted
         # the same way: request() only returns for 200/204.
@@ -372,7 +369,9 @@ class Meters(_Store):
         if not filtered_data:
             return {}
         peaks = {
-            "mix/level/peaks": [max(values) for values in zip(*filtered_data.values())]
+            "mix/level/peaks": [
+                max(values) for values in zip(*filtered_data.values(), strict=True)
+            ]
         }
         self.data.update(peaks)
         logger.debug("Modified: %s -> %s", self.base_path, peaks)

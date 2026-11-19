@@ -21,3 +21,4 @@ Roadmap for [motu-client](README.md).
 - [x] Implement config file
 - [ ] Decouple API service, MOTU connection handling and Skaarhoj Panel connection handling
 - [x] Replace requests with aiohttp
+- [ ] Replace connection-state polling loops in the panel client with asyncio.Event

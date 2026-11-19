@@ -168,29 +168,20 @@ class FeedbackTarget:
     audio_meter: dict | None = None
 
 
-class _Map:
-    """Shared key → value lookup. Subclasses only implement from_raw."""
+class _Map(Mapping):
+    """Read-only key → value mapping. Subclasses only implement from_raw."""
 
     def __init__(self, bindings: Mapping):
         self._bindings = dict(bindings)
 
-    def resolve(self, key: str):
-        return self._bindings.get(key)
+    def __getitem__(self, key: str):
+        return self._bindings[key]
 
-    def __contains__(self, key: str) -> bool:
-        return key in self._bindings
+    def __iter__(self):
+        return iter(self._bindings)
 
     def __len__(self) -> int:
         return len(self._bindings)
-
-    def items(self):
-        return self._bindings.items()
-
-    def keys(self):
-        return self._bindings.keys()
-
-    def values(self):
-        return self._bindings.values()
 
 
 class ControlMap(_Map):
@@ -289,7 +280,7 @@ class MotuController:
     async def process_hwc(self, hwcid: str | int, value: str) -> None:
         """Apply one normalized HWC value ('Down' / 'Up' / fader level)."""
         # TODO: Prepare to handle 'Up' values as well.
-        cfg = self._map.resolve(hwcid)
+        cfg = self._map.get(hwcid)
         if cfg is None:
             logger.debug("hwcid %s is not mapped", hwcid)
             return
@@ -402,7 +393,7 @@ class PanelController:
     def _meter_targets(self) -> tuple[FeedbackTarget, ...]:
         return tuple(
             target
-            for target in (self._map.resolve("mix/level") or ())
+            for target in (self._map.get("mix/level") or ())
             if target.kind == "meter"
         )
 
@@ -441,7 +432,7 @@ class PanelController:
         logger.info("Initializing the panel feedback")
         dd = {}
         md = {}
-        for path in self._map.keys():
+        for path in self._map:
             v = self._ds.get(path)
             if v is None:
                 for i in [str(s) for s in range(15)] + ["peaks"]:
@@ -490,10 +481,7 @@ class PanelController:
         db_value: float | None,
         init: bool = False,
     ) -> dict:
-        if target.value is not None:
-            active = value == target.value
-        else:
-            active = bool(value)
+        active = (value == target.value) if target.value is not None else bool(value)
         msg: dict = {}
         if target.mode and (init or self._is_status_dependent(target.mode)):
             msg.update(
@@ -558,7 +546,7 @@ class PanelController:
         # TODO: Only change display text during feedback init
         messages = []
         for path, value in d.items():
-            mapping = self._map.resolve(path)
+            mapping = self._map.get(path)
             if mapping is None:
                 logger.debug("path %s is not mapped", path)
                 continue
@@ -618,7 +606,7 @@ class PanelController:
             return None
 
     def _meter_level_to_raw(self, value: int, *, multiplier: float = 1.0) -> int:
-        """Meter sample (0–1000 scale) → panel raw."""
+        """Meter sample (0-1000 scale) → panel raw."""
         linear = value * multiplier / 1000
         db = motu.level_to_db(linear)
         return db_to_raw(db, self._meters_range_mapping)
@@ -658,7 +646,10 @@ class PanelController:
         peaks: list | None,
         prev_peaks: list | None,
     ) -> bool:
-        """True when the channel level or peak differs. No previous value means changed."""
+        """True when the channel level or peak differs.
+
+        No previous value means changed.
+        """
         if prev_levels is None or self._get_meter_sample(
             levels, ch
         ) != self._get_meter_sample(prev_levels, ch):
