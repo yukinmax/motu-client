@@ -58,6 +58,7 @@ The application is wired together in `src/api.py`. At startup it opens the share
 ├── pyproject.toml            Project metadata and dependencies (uv)
 ├── uv.lock                   Locked dependencies
 ├── TODO.md                   Roadmap
+├── LICENSE                   GNU Affero General Public License v3.0
 └── src/
     ├── api.py                Quart app, REST API, /metrics, startup and shutdown wiring
     ├── binding.py            Controllers, control and feedback maps, raw/dB conversion
@@ -73,7 +74,7 @@ The application is wired together in `src/api.py`. At startup it opens the share
 - A MOTU AVB interface reachable over HTTP on the local network (the code defaults target a MOTU UltraLite-AVB)
 - A SKAARHOJ panel with the RAW panel interface enabled, reachable over TCP (port 9923 by default)
 - Docker, or Python 3.11+ with [uv](https://docs.astral.sh/uv/)
-- Python dependencies (see `pyproject.toml`): aiohttp, aioprometheus[quart], bidict, hypercorn, pydantic-settings and quart
+- Python dependencies (see `pyproject.toml`): aiohttp, aioprometheus[quart], hypercorn, pydantic-settings and quart
 
 ## Configuration
 

@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Local configuration (copied from config.example.toml)
+config.toml

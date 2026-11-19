@@ -1,8 +1,7 @@
 # Example configuration for motu-client.
 #
 # Point the application at this file with MOTU_BRIDGE_CONFIG=/path/to/config.toml
-# Every key is optional. Values shown here are the built-in defaults, except
-# the host names, which are placeholders.
+# Every key is optional. Values shown here are the built-in defaults.
 #
 # Priority, highest first:
 #   1. Environment variables named MOTU_BRIDGE_<KEY> (for example MOTU_BRIDGE_API_PORT)
