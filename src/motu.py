@@ -13,7 +13,16 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-LEVEL_RANGE = (0, 10 ** (12 / 20))
+# Gain limits in dB: above MAX_DB is clamped, below MIN_DB counts as silence.
+MAX_DB = 12
+MIN_DB = -120
+LEVEL_RANGE = (0, 10 ** (MAX_DB / 20))
+
+# Meter samples are kept in a ring buffer of this many slots, and
+# current_index points at the newest one. A sample runs from 0 to METER_SCALE,
+# which corresponds to linear gain 0 to 1.
+METER_SLOTS = 15
+METER_SCALE = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -34,11 +43,11 @@ def level_to_db(value: int | float) -> float:
 
 
 def db_to_level(db_value: int | float) -> float:
-    """dB to linear gain. Clamps above 12 and below -120."""
+    """dB to linear gain. Clamps above MAX_DB, below MIN_DB is silence."""
     db_value = float(db_value)
-    if db_value > 12:
-        db_value = 12
-    elif db_value < -120:
+    if db_value > MAX_DB:
+        db_value = MAX_DB
+    elif db_value < MIN_DB:
         db_value = -math.inf
     return 10 ** (db_value / 20)
 
@@ -374,7 +383,7 @@ class Meters(_Store):
         """Previous meter samples, or None when everything should be sent."""
         if self.current_index is None:
             return None
-        return self.get(f"mix/level/{(self.current_index - 1) % 15}")
+        return self.get(f"mix/level/{(self.current_index - 1) % METER_SLOTS}")
 
     @property
     def idle(self) -> bool:
@@ -385,7 +394,7 @@ class Meters(_Store):
         return not any(peaks)
 
     def _update_peaks(self) -> dict:
-        """Peak of each channel across the 15 sample slots."""
+        """Peak of each channel across the METER_SLOTS sample slots."""
         filtered_data = {k: v for k, v in self.data.items() if not k.endswith("peaks")}
         if not filtered_data:
             return {}
