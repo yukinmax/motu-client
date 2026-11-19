@@ -32,8 +32,8 @@ motu_http_client = motu.HTTPClient(
 )
 motu_ds = motu.DataStore(
     motu_http_client,
-    settings.motu_host,
-    settings.motu_port,
+    host=settings.motu_host,
+    port=settings.motu_port,
     refresh_timeout=settings.motu_refresh_timeout,
     refresh_retries=settings.motu_refresh_retries,
     mutate_timeout=settings.motu_mutate_timeout,
@@ -41,13 +41,13 @@ motu_ds = motu.DataStore(
 )
 motu_ms = motu.Meters(
     motu_http_client,
-    settings.motu_host,
-    settings.motu_port,
+    host=settings.motu_host,
+    port=settings.motu_port,
     refresh_timeout=settings.motu_refresh_timeout,
     refresh_retries=settings.motu_refresh_retries,
 )
 skaarhoj_panel = raw_panel.RawPanel(
-    settings.panel_host,
+    host=settings.panel_host,
     port=settings.panel_port,
     delay=settings.panel_delay,
     idle_sleep=settings.panel_idle_sleep,

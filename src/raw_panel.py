@@ -25,8 +25,8 @@ def normalize_hwc_value(value: str) -> str:
 class RawPanel:
     def __init__(
         self,
-        host: str,
         *,
+        host: str,
         port: int,
         mode: str = "ASCII",
         delay: float,

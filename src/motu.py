@@ -172,9 +172,9 @@ class _Store:
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str,
-        port: int,
         *,
+        host: str,
+        port: int,
         refresh_timeout: float | None,
         refresh_retries: int | None,
     ) -> None:
@@ -182,7 +182,7 @@ class _Store:
         initial one at startup and those made by poll(). None means no
         timeout / unlimited retries."""
         self.http = http
-        self.hostname = hostname
+        self.host = host
         self.port = port
         self.refresh_timeout = refresh_timeout
         self.refresh_retries = refresh_retries
@@ -199,7 +199,7 @@ class _Store:
         return False
 
     def _url(self) -> str:
-        return f"http://{self.hostname}:{self.port}/{self.base_path}"
+        return f"http://{self.host}:{self.port}/{self.base_path}"
 
     def stop(self) -> None:
         """Signal poll loops to exit on next iteration."""
@@ -258,9 +258,7 @@ class _Store:
         handle_changes: bool = True,
         idle_interval: float = 0.0,
     ) -> None:
-        logger.info(
-            "Polling MOTU %s (%s:%s)...", self.base_path, self.hostname, self.port
-        )
+        logger.info("Polling MOTU %s (%s:%s)...", self.base_path, self.host, self.port)
         while not self._stopped:
             try:
                 started = time.perf_counter()
@@ -276,7 +274,7 @@ class _Store:
         logger.info(
             "Stopped polling MOTU %s (%s:%s)",
             self.base_path,
-            self.hostname,
+            self.host,
             self.port,
         )
 
@@ -289,14 +287,21 @@ class DataStore(_Store):
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str,
-        port: int,
         *,
+        host: str,
+        port: int,
+        refresh_timeout: float | None,
+        refresh_retries: int | None,
         mutate_timeout: float | None,
         mutate_retries: int | None,
-        **kwargs,
     ) -> None:
-        super().__init__(http, hostname, port, **kwargs)
+        super().__init__(
+            http,
+            host=host,
+            port=port,
+            refresh_timeout=refresh_timeout,
+            refresh_retries=refresh_retries,
+        )
         self.mutate_timeout = mutate_timeout
         self.mutate_retries = mutate_retries
         self.base_path = "datastore"
@@ -338,11 +343,19 @@ class Meters(_Store):
     def __init__(
         self,
         http: HTTPClient,
-        hostname: str,
+        *,
+        host: str,
         port: int,
-        **kwargs,
+        refresh_timeout: float | None,
+        refresh_retries: int | None,
     ) -> None:
-        super().__init__(http, hostname, port, **kwargs)
+        super().__init__(
+            http,
+            host=host,
+            port=port,
+            refresh_timeout=refresh_timeout,
+            refresh_retries=refresh_retries,
+        )
         self.base_path = "meters"
         self.refresh_params = {"meters": "mix/level"}
         self.client_id = generate_client_id()
