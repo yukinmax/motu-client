@@ -122,7 +122,7 @@ class HTTPClient:
         body). Returns None when the request failed: any other status or a
         connection error or timeout counts as a failed attempt, which is retried
         up to `retries` times (None retries forever) with `retry_interval`
-        seconds between attempts.
+        seconds between attempts. Retries never send the ETag.
         """
         if not self.started:
             logger.error("HTTP request attempted before session start: %s", url)
@@ -164,6 +164,9 @@ class HTTPClient:
                 logger.debug("%s", e)
 
             logger.warning("Request to %s failed (%s)", url, failure)
+            # The MOTU resets its ETag sequence on reboot, so a stale ETag can
+            # keep failing. Retry without it to fetch the full state.
+            headers.pop("If-None-Match", None)
             if retries is not None and attempt > retries:
                 logger.error("Maximum retries reached for %s", url)
                 return None
@@ -226,6 +229,7 @@ class _Store:
             attempt_timeout=self.refresh_timeout,
         )
         if response is None:
+            self.etag = None
             return None
         if response.status_code == 304:
             logger.debug("Not modified: %s", self.base_path)
