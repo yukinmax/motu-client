@@ -296,7 +296,7 @@ class DataStore(_Store):
         port: int,
         *,
         mutate_timeout: float | None,
-        mutate_retries: int,
+        mutate_retries: int | None,
         **kwargs,
     ) -> None:
         super().__init__(http, hostname, port, **kwargs)

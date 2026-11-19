@@ -110,7 +110,7 @@ Conventions used by the settings:
 | `MOTU_BRIDGE_MOTU_REFRESH_TIMEOUT` | `motu_refresh_timeout` | `15` | Seconds to wait for each refresh request to the MOTU, at startup and in the polling loop. The MOTU holds a long-poll request for about 10 seconds. `0` waits indefinitely. |
 | `MOTU_BRIDGE_MOTU_REFRESH_RETRIES` | `motu_refresh_retries` | `-1` | Retries for a failed refresh request to the MOTU, at startup and in the polling loop. `-1` retries forever, so startup waits until the MOTU is reachable. `0` does not retry. |
 | `MOTU_BRIDGE_MOTU_MUTATE_TIMEOUT` | `motu_mutate_timeout` | `2` | Seconds to wait for a write to the MOTU to complete. `0` waits indefinitely. |
-| `MOTU_BRIDGE_MOTU_MUTATE_RETRIES` | `motu_mutate_retries` | `0` | Retries for a failed write to the MOTU. `0` does not retry. |
+| `MOTU_BRIDGE_MOTU_MUTATE_RETRIES` | `motu_mutate_retries` | `0` | Retries for a failed write to the MOTU. `0` does not retry, and `-1` retries forever. |
 | `MOTU_BRIDGE_MOTU_RETRY_INTERVAL` | `motu_retry_interval` | `10` | Seconds between retries of a failed MOTU request |
 | `MOTU_BRIDGE_MOTU_CONNECTOR_LIMIT` | `motu_connector_limit` | `10` | Maximum simultaneous HTTP connections to the MOTU |
 | `MOTU_BRIDGE_METERS_IDLE_INTERVAL` | `meters_idle_interval` | `0.2` | Seconds between meter polls while all meters are silent |

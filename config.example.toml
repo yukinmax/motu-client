@@ -44,7 +44,7 @@ motu_refresh_timeout = 15
 motu_refresh_retries = -1
 
 # Seconds to wait for a write to the MOTU to complete (0 = no timeout), and how
-# many times to retry a failed write
+# many times to retry a failed write (0 = do not retry, -1 = forever)
 motu_mutate_timeout = 2
 motu_mutate_retries = 0
 
@@ -60,9 +60,9 @@ meters_idle_interval = 0.2
 # --- Panel connection --------------------------------------------------------
 
 # Retries of the first panel connection at startup before startup continues
-# (-1 = wait for the panel). The panel is then reconnected in the background,
-# forever, whenever the connection is down. Also: seconds between attempts, and
-# seconds to wait for each attempt (0 = no timeout).
+# (-1 = wait for the panel, 0 = do not retry). The panel is then reconnected in
+# the background, forever, whenever the connection is down. Also: seconds
+# between attempts, and seconds to wait for each attempt (0 = no timeout).
 panel_connect_retries = 20
 panel_connect_retry_interval = 10
 panel_connect_timeout = 10
@@ -78,7 +78,7 @@ panel_wakeup_min_interval = 10
 # Seconds a hardware change is buffered before it is processed
 panel_delay = 0.001
 
-# Seconds to wait between checks when no hardware changes are buffered
+# Seconds to wait between checks when no hardware changes are buffered (> 0)
 panel_idle_sleep = 0.1
 
 # Panel sleep timeout in minutes (0 keeps the panel's own default)
@@ -94,7 +94,7 @@ panel_sleep_screen_saver = 0
 panel_brightness_leds = 4
 panel_brightness_oleds = 2
 
-# Gain used while the panel is dimmed (1-64, 64 is full gain)
+# Gain used while the panel is dimmed (0-64, 64 is full gain, 0 = panel default)
 panel_dimmed_gain = 20
 
 # --- Server lifecycle --------------------------------------------------------
@@ -102,5 +102,5 @@ panel_dimmed_gain = 20
 # Seconds the server waits for application startup to finish (0 = no timeout)
 startup_timeout = 500
 
-# Seconds background tasks get to finish on shutdown
+# Seconds background tasks get to finish on shutdown (> 0)
 shutdown_timeout = 5

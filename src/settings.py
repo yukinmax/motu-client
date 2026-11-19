@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     meters_idle_interval: Interval = 0.2
 
     # Panel connection
-    panel_connect_retries: Retries = -1
+    panel_connect_retries: Retries = 20
     panel_connect_retry_interval: Interval = 10
     panel_connect_timeout: Timeout = 10
     panel_send_timeout: Timeout = 1
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Panel behavior
     panel_delay: Interval = 0.001
     panel_idle_sleep: Annotated[float, Field(gt=0)] = 0.1
-    panel_sleep_timeout_minutes: Timeout = 10
+    panel_sleep_timeout_minutes: Annotated[int, Field(ge=0)] = 10
     panel_sleep_mode: Annotated[int, Field(ge=0, le=1)] = 0
     panel_sleep_screen_saver: Annotated[int, Field(ge=0, le=3)] = 0
     panel_brightness_leds: Annotated[int, Field(ge=0, le=8)] = 4
