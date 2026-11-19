@@ -74,7 +74,7 @@ The application is wired together in `src/api.py`. At startup it opens the share
 - A MOTU AVB interface reachable over HTTP on the local network (the code defaults target a MOTU UltraLite-AVB)
 - A SKAARHOJ panel with the RAW panel interface enabled, reachable over TCP (port 9923 by default)
 - Docker, or Python 3.11+ with [uv](https://docs.astral.sh/uv/)
-- Python dependencies (see `pyproject.toml`): aiohttp, aioprometheus[quart], hypercorn, pydantic-settings and quart
+- Python dependencies (see `pyproject.toml`): aiohttp, aioprometheus[quart], hypercorn, pydantic, pydantic-settings and quart
 
 ## Configuration
 
