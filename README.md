@@ -1,10 +1,10 @@
-# motu-client
+# motu-bridge
 
 A bridge between a [SKAARHOJ](https://www.skaarhoj.com/) RAW control panel and a MOTU AVB audio interface, with a REST API and Prometheus metrics. The panel's faders, buttons, displays and level meters become a physical mixer surface for the interface's monitor mixes.
 
 ## Overview
 
-MOTU AVB interfaces expose their mixer state over an HTTP API, and SKAARHOJ panels can be driven over a plain TCP "RAW panel" protocol. motu-client connects the two. Moving a fader or pressing a button on the panel changes the MOTU mixer, and changes made on the MOTU side (or through the REST API) are reflected back on the panel's fader positions, button lights, displays and level meters.
+MOTU AVB interfaces expose their mixer state over an HTTP API, and SKAARHOJ panels can be driven over a plain TCP "RAW panel" protocol. motu-bridge connects the two. Moving a fader or pressing a button on the panel changes the MOTU mixer, and changes made on the MOTU side (or through the REST API) are reflected back on the panel's fader positions, button lights, displays and level meters.
 
 It is an asyncio service built on [Quart](https://quart.palletsprojects.com/), served by [Hypercorn](https://hypercorn.readthedocs.io/). The MOTU device is followed with HTTP long-polling through [aiohttp](https://docs.aiohttp.org/), and the panel connection is a TCP socket managed by the application.
 
@@ -159,11 +159,11 @@ The panel layout is defined by two tables in `src/mappings.py`: `control_map` ma
 ### Docker
 
 ```bash
-docker build -t motu-client .
+docker build -t motu-bridge .
 docker run --rm -p 5000:5000 \
   -e MOTU_BRIDGE_MOTU_HOST=motu.example.local \
   -e MOTU_BRIDGE_PANEL_HOST=panel.example.local \
-  motu-client
+  motu-bridge
 ```
 
 The container runs Hypercorn as `python -m hypercorn api:app --config file:hypercorn_config.py` under a non-root user (UID 8888) and exposes port 5000, the default `MOTU_BRIDGE_API_PORT`. If you change the API port, publish that port instead. The MOTU interface and the panel must be reachable from the container.
@@ -175,7 +175,7 @@ cp config.example.toml config.toml   # edit as needed
 docker run --rm -p 5000:5000 \
   -v "$PWD/config.toml:/config/config.toml:ro" \
   -e MOTU_BRIDGE_CONFIG=/config/config.toml \
-  motu-client
+  motu-bridge
 ```
 
 The file must be readable by the container user (UID 8888). Environment variables passed with `-e` still override values from the file.
@@ -187,7 +187,7 @@ Bare host names such as the default `ultralite-avb` and `waveboard` can resolve 
 
 ```yaml
 services:
-  motu-client:
+  motu-bridge:
     dns_search:
       - example.lan
 ```
