@@ -27,7 +27,7 @@ if settings.log_level != "INFO":
 app = Quart("MOTU API")
 app.config["BACKGROUND_TASK_SHUTDOWN_TIMEOUT"] = settings.shutdown_timeout
 motu_http_client = motu.HTTPClient(
-    retry_interval_sec=settings.motu_retry_interval,
+    retry_interval=settings.motu_retry_interval,
     connector_limit=settings.motu_connector_limit,
 )
 motu_ds = motu.DataStore(
@@ -51,16 +51,16 @@ skaarhoj_panel = raw_panel.RawPanel(
     port=settings.panel_port,
     delay=settings.panel_delay,
     idle_sleep=settings.panel_idle_sleep,
-    sleep_timeout_minutes=settings.panel_sleep_timeout_minutes,
+    sleep_timeout=settings.panel_sleep_timeout,
     sleep_mode=settings.panel_sleep_mode,
     sleep_screen_saver=settings.panel_sleep_screen_saver,
     panel_brightness_leds=settings.panel_brightness_leds,
     panel_brightness_oleds=settings.panel_brightness_oleds,
     panel_dimmed_gain=settings.panel_dimmed_gain,
-    connect_retry_interval_sec=settings.panel_connect_retry_interval,
-    connect_timeout_sec=settings.panel_connect_timeout,
-    send_timeout_sec=settings.panel_send_timeout,
-    wakeup_min_interval_sec=settings.panel_wakeup_min_interval,
+    connect_retry_interval=settings.panel_connect_retry_interval,
+    connect_timeout=settings.panel_connect_timeout,
+    send_timeout=settings.panel_send_timeout,
+    wakeup_min_interval=settings.panel_wakeup_min_interval,
 )
 
 control_map = binding.ControlMap.from_raw(mappings.control_map)

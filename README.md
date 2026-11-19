@@ -134,7 +134,7 @@ After the first connection attempt, the application keeps reconnecting to the pa
 | --- | --- | --- | --- |
 | `MOTU_BRIDGE_PANEL_DELAY` | `panel_delay` | `0.001` | Seconds a hardware change is buffered before it is processed |
 | `MOTU_BRIDGE_PANEL_IDLE_SLEEP` | `panel_idle_sleep` | `0.1` | Seconds to wait between checks when no hardware changes are buffered (greater than `0`) |
-| `MOTU_BRIDGE_PANEL_SLEEP_TIMEOUT_MINUTES` | `panel_sleep_timeout_minutes` | `10` | Panel sleep timeout in minutes. `0` leaves the panel's own default. |
+| `MOTU_BRIDGE_PANEL_SLEEP_TIMEOUT` | `panel_sleep_timeout` | `600` | Panel sleep timeout in seconds. `0` leaves the panel's own default. |
 | `MOTU_BRIDGE_PANEL_SLEEP_MODE` | `panel_sleep_mode` | `0` | `0` animates the panel LEDs while asleep, `1` turns the buttons off |
 | `MOTU_BRIDGE_PANEL_SLEEP_SCREEN_SAVER` | `panel_sleep_screen_saver` | `0` | Screen saver while asleep: `0` wake up on key press, `1` Sheep And Goats, `2` Save The Oleds, `3` Just Dimmed |
 | `MOTU_BRIDGE_PANEL_BRIGHTNESS_LEDS` | `panel_brightness_leds` | `4` | LED brightness (0-8) |

@@ -113,8 +113,6 @@ def role_from_path(path: str) -> str:
     name = m.group(1)
     if name in ("send", "fader"):
         return "send"
-    if name in ("mute", "solo", "override"):
-        return name
     return name
 
 
@@ -171,7 +169,7 @@ class FeedbackTarget:
 class _Map(Mapping):
     """Read-only key → value mapping. Subclasses only implement from_raw."""
 
-    def __init__(self, bindings: Mapping):
+    def __init__(self, bindings: Mapping) -> None:
         self._bindings = dict(bindings)
 
     def __getitem__(self, key: str):
@@ -238,7 +236,7 @@ class FeedbackMap(_Map):
 class MotuController:
     """Panel HWC → Motu datastore."""
 
-    def __init__(self, control_map: ControlMap, *, range_mapping: tuple):
+    def __init__(self, control_map: ControlMap, *, range_mapping: tuple) -> None:
         self._map = control_map
         self._range_mapping = range_mapping
         self._ds = None
@@ -364,7 +362,7 @@ class PanelController:
         *,
         faders_range_mapping: tuple,
         meters_range_mapping: tuple,
-    ):
+    ) -> None:
         self._map = feedback_map
         self._faders_range_mapping = faders_range_mapping
         self._meters_range_mapping = meters_range_mapping
@@ -401,9 +399,9 @@ class PanelController:
         for target in self._meter_targets:
             if path not in (target.fader_path, target.mute_path):
                 continue
-            self._meter_multipliers[target.hwcid] = self._calculate_meter_multiplier(
-                target
-            )
+            multiplier = self._calculate_meter_multiplier(target)
+            if multiplier is not None:
+                self._meter_multipliers[target.hwcid] = multiplier
 
     async def on_change(
         self, data: dict, *, source: str, origin: str | None = None
@@ -423,10 +421,10 @@ class PanelController:
         if self._panel is None:
             logger.warning("PanelController.init_feedback: no panel")
             return
-        if not self._ds:
+        if self._ds is None:
             logger.warning("PanelController.init_feedback: no datastore")
             return
-        if not self._ms:
+        if self._ms is None:
             logger.warning("PanelController.init_feedback: no meters")
             return
         logger.info("Initializing the panel feedback")

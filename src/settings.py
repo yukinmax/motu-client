@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Panel behavior
     panel_delay: Interval = 0.001
     panel_idle_sleep: Annotated[float, Field(gt=0)] = 0.1
-    panel_sleep_timeout_minutes: Annotated[int, Field(ge=0)] = 10
+    panel_sleep_timeout: Annotated[int, Field(ge=0)] = 600
     panel_sleep_mode: Annotated[int, Field(ge=0, le=1)] = 0
     panel_sleep_screen_saver: Annotated[int, Field(ge=0, le=3)] = 0
     panel_brightness_leds: Annotated[int, Field(ge=0, le=8)] = 4

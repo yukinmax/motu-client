@@ -80,8 +80,8 @@ panel_delay = 0.001
 # Seconds to wait between checks when no hardware changes are buffered (> 0)
 panel_idle_sleep = 0.1
 
-# Panel sleep timeout in minutes (0 keeps the panel's own default)
-panel_sleep_timeout_minutes = 10
+# Panel sleep timeout in seconds (0 keeps the panel's own default)
+panel_sleep_timeout = 600
 
 # Sleep mode: 0 animates the LEDs, 1 turns the buttons off
 panel_sleep_mode = 0

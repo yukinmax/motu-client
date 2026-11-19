@@ -54,7 +54,7 @@ def generate_client_id() -> int:
 
 @dataclass(slots=True)
 class _HttpResult:
-    """Minimal response shape used by _Store / DataStore."""
+    """Minimal response shape used by _Store / DataStore. 304 has no body."""
 
     status_code: int
     reason: str | None
@@ -71,10 +71,10 @@ class HTTPClient:
     def __init__(
         self,
         *,
-        retry_interval_sec: float,
+        retry_interval: float,
         connector_limit: int,
     ) -> None:
-        self._retry_interval_sec = retry_interval_sec
+        self._retry_interval = retry_interval
         self._connector_limit = connector_limit
         self._session: aiohttp.ClientSession | None = None
 
@@ -116,6 +116,14 @@ class HTTPClient:
         retries: int | None = None,
         attempt_timeout: float | None = None,
     ) -> _HttpResult | None:
+        """Send a request, retrying failed attempts.
+
+        Returns the result for 200 and 204, and for 304 (not modified, with no
+        body). Returns None when the request failed: any other status or a
+        connection error or timeout counts as a failed attempt, which is retried
+        up to `retries` times (None retries forever) with `retry_interval`
+        seconds between attempts.
+        """
         if not self.started:
             logger.error("HTTP request attempted before session start: %s", url)
             return None
@@ -143,29 +151,23 @@ class HTTPClient:
                 ) as resp:
                     status = resp.status
                     reason = resp.reason
-                    etag = resp.headers.get("ETag")  # case-insensitive
+                    resp_etag = resp.headers.get("ETag")  # case-insensitive
 
-                    if status in (200, 204):
+                    if status in (200, 204, 304):
                         body = None
                         if status == 200:
                             body = await resp.json(content_type=None)
-                        return _HttpResult(status, reason, etag, body)
-
-                    if status != 304:
-                        logger.error("Error code %s - %s", status, reason)
-                    return None
-
+                        return _HttpResult(status, reason, resp_etag, body)
+                    failure = f"HTTP {status} {reason}"
             except (aiohttp.ClientError, TimeoutError) as e:
-                logger.warning(
-                    "Request to %s failed (%s)",
-                    url,
-                    type(e).__name__,
-                )
+                failure = type(e).__name__
                 logger.debug("%s", e)
-                if retries is not None and attempt > retries:
-                    logger.error("Maximum retries reached for %s", url)
-                    return None
-                await asyncio.sleep(self._retry_interval_sec)
+
+            logger.warning("Request to %s failed (%s)", url, failure)
+            if retries is not None and attempt > retries:
+                logger.error("Maximum retries reached for %s", url)
+                return None
+            await asyncio.sleep(self._retry_interval)
 
 
 class _Store:
@@ -224,6 +226,8 @@ class _Store:
             attempt_timeout=self.refresh_timeout,
         )
         if response is None:
+            return None
+        if response.status_code == 304:
             logger.debug("Not modified: %s", self.base_path)
             return None
 
