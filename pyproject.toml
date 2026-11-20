@@ -1,6 +1,6 @@
 [project]
 name = "motu-bridge"
-version = "0.5.1"
+version = "0.6.0"
 description = "Bridge between a SKAARHOJ RAW panel and a MOTU AVB audio interface, with a REST API and Prometheus metrics"
 readme = "README.md"
 requires-python = ">=3.11"
