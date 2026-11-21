@@ -326,13 +326,21 @@ class MixerService:
         control = self._control(path)
         return self._reading(control, self._format(control, fmt))
 
-    async def write(self, path: str, value: object, fmt: str | None = None) -> Reading:
+    async def write(
+        self,
+        path: str,
+        value: object,
+        fmt: str | None = None,
+        response_fmt: str | None = None,
+    ) -> Reading:
+        """fmt is the unit of value; the response uses response_fmt, else fmt."""
         control = self._control(path)
         codec = self._codec(control)
         fmt = self._format(control, fmt)
+        response_fmt = self._format(control, response_fmt) if response_fmt else fmt
         if await self._store.set(path, codec.encode(value, fmt)) is None:
             raise Rejected(f"MOTU did not accept the change to {path}")
-        return self._reading(control, fmt)
+        return self._reading(control, response_fmt)
 
     async def toggle(self, path: str) -> Reading:
         control = self._control(path)

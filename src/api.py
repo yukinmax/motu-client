@@ -164,7 +164,7 @@ def _response(reading: mixer.Reading) -> dict:
     return {"value": reading.value, "format": reading.format}
 
 
-async def _body_value() -> object:
+async def _body() -> dict:
     body = await request.get_json(silent=True)
     if not isinstance(body, dict):
         raise BadRequest(
@@ -172,7 +172,7 @@ async def _body_value() -> object:
         )
     if "value" not in body:
         raise BadRequest("Missing field 'value'")
-    return body["value"]
+    return body
 
 
 MIX_ROUTE = "/api/v1/motu/mix/<path:path>"
@@ -186,9 +186,12 @@ async def mix_get(path: str) -> dict:
 
 @app.route(MIX_ROUTE, methods=["PUT"])
 async def mix_put(path: str) -> dict:
-    fmt = request.args.get("format")
-    value = await _body_value()
-    return _response(await mixer_service.write(f"mix/{path}", value, fmt))
+    body = await _body()
+    return _response(
+        await mixer_service.write(
+            f"mix/{path}", body["value"], body.get("format"), request.args.get("format")
+        )
+    )
 
 
 @app.route(MIX_ROUTE, methods=["POST"])

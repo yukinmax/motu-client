@@ -211,13 +211,13 @@ Then open <http://127.0.0.1:5000/>.
 
 ## REST API
 
-The mixer API mirrors the MOTU datastore: the URL path after `/api/v1/motu/mix/` is the datastore path after `mix/`, for example `chan/0/matrix/mute`, `chan/0/matrix/aux/0/send`, `chan/0/eq/mid1/gain` or `reverb/0/reverb/predelay`. `GET` reads a value. `PUT` sets it, with the new value as a JSON object in the request body (`Content-Type: application/json`). `POST` toggles an on/off control and takes no body. Every response under `/api/` is JSON, errors included.
+The mixer API mirrors the MOTU datastore: the URL path after `/api/v1/motu/mix/` is the datastore path after `mix/`, for example `chan/0/matrix/mute`, `chan/0/matrix/aux/0/send`, `chan/0/eq/mid1/gain` or `reverb/0/reverb/predelay`. `GET` reads a value. `PUT` sets it, with the new value, and for levels optionally its `format`, as a JSON object in the request body (`Content-Type: application/json`). `POST` toggles an on/off control and takes no body. Every response under `/api/` is JSON, errors included.
 
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
 | `GET` | `/` | | Landing page (HTML) |
 | `GET` | `/api/v1/motu/mix/<path>?format=<format>` | | `{"value": 0.5, "format": "linear"}` |
-| `PUT` | `/api/v1/motu/mix/<path>?format=<format>` | `{"value": 0.5}` | `{"value": 0.5, "format": "linear"}` with the value that was applied |
+| `PUT` | `/api/v1/motu/mix/<path>?format=<format>` | `{"value": -6, "format": "db"}` | `{"value": 0.5, "format": "linear"}` with the value that was applied |
 | `POST` | `/api/v1/motu/mix/<path>` | none | `{"value": true}` with the new state after toggling |
 
 Each control is validated against the specification the MOTU publishes for it under `mix/ctrls`:
@@ -225,20 +225,22 @@ Each control is validated against the specification the MOTU publishes for it un
 - On/off controls such as `matrix/mute`, `matrix/solo` or `eq/mid1/enable` take `true` or `false`, and are the only controls `POST` can toggle
 - Numeric controls such as `eq/mid1/gain` (dB), `eq/mid1/freq` (Hz) or `comp/attack` (ms) take a number within the control's range
 - Choice controls such as `comp/peak` or `eq/lowshelf/mode` take the number of one of the choices
-- Levels such as `matrix/fader`, sends such as `matrix/aux/<aux>/send`, `gate/threshold` and `talkback/dim` take a number in the unit given by `format`
+- Levels such as `matrix/fader`, sends such as `matrix/aux/<aux>/send`, `gate/threshold` and `talkback/dim` take a number in the unit given by the body's `format`
 - Values without a specification, such as `config/format`, can be read but not changed
 
-The optional `format` query parameter applies to levels only and selects their unit, both in the `PUT` body and in the response:
+Levels can be read and written in any of these formats:
 
 - `linear` (default): linear gain, the MOTU's native value
 - `db`: decibels
 - `raw-panel`: the panel's fader scale
 
+The `format` field in a `PUT` body sets the unit of `value`. The optional `format` query parameter sets the unit of the response, and defaults to the body's `format` on `PUT`. Both apply to levels only.
+
 When setting a level, the value is limited to the control's maximum, which is 4.0 linear (about +12 dB) for faders and sends, and rounded to the MOTU's resolution of six decimal places, so the lowest level above silence is -120 dB. A level of 0 is silence, which is minus infinity in dB. JSON has no infinity, so in `db` format silence is `null`, both in responses and when setting a level. In `raw-panel` format silence is `0`.
 
 Errors are returned as JSON of the form `{"error": "description"}` with one of these status codes:
 
-- `400`: an invalid value or `format`, a `format` on a control that is not a level, a change to a read-only value, a `POST` to a control that is not on/off, or a request body that is not a JSON object with a `value` field
+- `400`: an invalid value or `format`, a `format` in the query or body on a control that is not a level, a change to a read-only value, a `POST` to a control that is not on/off, or a request body that is not a JSON object with a `value` field
 - `404`: the MOTU has no value at the requested path, or the URL does not exist
 - `405`: the HTTP method is not supported for the URL
 - `502`: the MOTU did not accept a change
@@ -251,7 +253,8 @@ curl http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/mute
 curl -X PUT http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/mute -H 'Content-Type: application/json' -d '{"value": true}'
 curl -X POST http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/mute
 curl "http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send?format=db"
-curl -X PUT "http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send?format=db" -H 'Content-Type: application/json' -d '{"value": -10}'
+curl -X PUT http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send -H 'Content-Type: application/json' -d '{"value": -10, "format": "db"}'
+curl -X PUT "http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send?format=raw-panel" -H 'Content-Type: application/json' -d '{"value": -10, "format": "db"}'
 curl -X PUT http://127.0.0.1:5000/api/v1/motu/mix/chan/0/eq/mid1/gain -H 'Content-Type: application/json' -d '{"value": 3.5}'
 ```
 
