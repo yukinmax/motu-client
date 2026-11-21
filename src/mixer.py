@@ -138,10 +138,6 @@ class Scale(Protocol):
     def from_db(self, db: float) -> float: ...
 
 
-# The MOTU's level resolution: it stores anything below 5e-7 as 0.
-LEVEL_DECIMALS = 6
-
-
 @dataclass(frozen=True, slots=True)
 class LevelCodec:
     """Linear gain, also readable and writable in dB and any extra scales."""
@@ -180,7 +176,7 @@ class LevelCodec:
                     levels.level_to_db(self.maximum),
                 )
             )
-        return round(level, LEVEL_DECIMALS)
+        return round(level, levels.LEVEL_DECIMALS)
 
 
 def parse_spec(spec: str, scales: Mapping[str, Scale] | None = None) -> Codec:
@@ -223,10 +219,8 @@ class Control:
 class Controls:
     """Datastore path -> Control, using the specs found in the datastore."""
 
-    def __init__(
-        self, data: Mapping[str, Any], scales: Mapping[str, Scale] | None = None
-    ) -> None:
-        self._data = data
+    def __init__(self, store: Store, scales: Mapping[str, Scale] | None = None) -> None:
+        self._store = store
         self._scales = dict(scales or {})
         self._codecs: dict[str, Codec | None] = {}
 
@@ -241,15 +235,15 @@ class Controls:
         if key is None:
             return None
         # mix/ctrls/<strip> lists the sections a strip type supports.
-        sections = self._data.get(f"mix/ctrls/{path.split('/')[1]}")
+        sections = self._store.get(f"mix/ctrls/{path.split('/')[1]}")
         if isinstance(sections, str) and key.split("/")[0] not in sections.split(":"):
             return None
-        spec = self._data.get(f"mix/ctrls/{key}")
+        spec = self._store.get(f"mix/ctrls/{key}")
         return parse_spec(spec, self._scales) if isinstance(spec, str) else None
 
     def get(self, path: str) -> Control | None:
         """The control at path, or None if the datastore has no such value."""
-        if not path.startswith("mix/") or path not in self._data:
+        if not path.startswith("mix/") or path not in self._store.data:
             return None
         if path not in self._codecs:
             self._codecs[path] = self._codec(path)
@@ -287,7 +281,7 @@ class MixerService:
     ) -> None:
         """scales: extra level formats by name, besides linear and db."""
         self._store = store
-        self._controls = Controls(store.data, scales)
+        self._controls = Controls(store, scales)
 
     def _control(self, path: str) -> Control:
         if not self._store.data:
@@ -337,7 +331,9 @@ class MixerService:
         control = self._control(path)
         codec = self._codec(control)
         fmt = self._format(control, fmt)
-        response_fmt = self._format(control, response_fmt) if response_fmt else fmt
+        response_fmt = (
+            fmt if response_fmt is None else self._format(control, response_fmt)
+        )
         if await self._store.set(path, codec.encode(value, fmt)) is None:
             raise Rejected(f"MOTU did not accept the change to {path}")
         return self._reading(control, response_fmt)

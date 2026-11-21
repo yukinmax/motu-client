@@ -301,7 +301,11 @@ class MotuController:
             if cfg.default_level_db is None:
                 logger.debug("No default level for path %s", cfg.path)
                 return 1.0
-            default = levels.db_to_level(min(cfg.default_level_db, MAX_DB))
+            # Rounded like the MOTU stores it, so it compares equal after a poll.
+            default = round(
+                levels.db_to_level(min(cfg.default_level_db, MAX_DB)),
+                levels.LEVEL_DECIMALS,
+            )
             return default if current != default else 1.0
         db = self._fader_scale.to_db(raw)
         return levels.db_to_level(db)

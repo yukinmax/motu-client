@@ -1,6 +1,9 @@
-"""Gain level conversions shared by the MOTU client, the panel and the API."""
+"""Gain level conversions shared by the panel and the API."""
 
 import math
+
+# The MOTU's level resolution: it stores anything below 5e-7 as 0.
+LEVEL_DECIMALS = 6
 
 
 def limit_to_range(value: float, minimum: float, maximum: float) -> float:
