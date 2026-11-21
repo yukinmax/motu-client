@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
 import random
 import time
 from dataclasses import dataclass
@@ -12,11 +11,6 @@ from typing import Any
 import aiohttp
 
 logger = logging.getLogger(__name__)
-
-# Gain limits in dB: above MAX_DB is clamped, below MIN_DB counts as silence.
-MAX_DB = 12
-MIN_DB = -120
-LEVEL_RANGE = (0, 10 ** (MAX_DB / 20))
 
 # Meter samples are kept in a ring buffer of this many slots, and
 # current_index points at the newest one. A sample runs from 0 to METER_SCALE,
@@ -28,28 +22,6 @@ METER_SCALE = 1000
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def limit_to_range(value: float, minimum: float, maximum: float) -> float:
-    return max(min(value, maximum), minimum)
-
-
-def level_to_db(value: int | float) -> float:
-    """Linear gain to dB. 0 returns -inf."""
-    value = float(value)
-    if value == 0:
-        return -math.inf
-    return 20 * math.log10(value)
-
-
-def db_to_level(db_value: int | float) -> float:
-    """dB to linear gain. Clamps above MAX_DB, below MIN_DB is silence."""
-    db_value = float(db_value)
-    if db_value > MAX_DB:
-        db_value = MAX_DB
-    elif db_value < MIN_DB:
-        db_value = -math.inf
-    return 10 ** (db_value / 20)
 
 
 def dict_diff(d_old: dict, d_new: dict) -> dict:

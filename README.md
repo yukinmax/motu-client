@@ -20,7 +20,7 @@ It is an asyncio service built on [Quart](https://quart.palletsprojects.com/), s
 - Panel sleep and wake handling: the panel sleep timeout is configured on connect, activity wakes the panel, and the feedback state is re-sent after it wakes up
 - Panel connection resilience: TCP keepalive, `TCP_NODELAY`, automatic reconnect and lost-connection handling
 - Panel feedback is batched into as few writes as possible
-- REST API for reading and changing MOTU mute and aux send state, and for sending raw commands to the panel
+- REST API for reading and changing every MOTU mixer control, validated against the control specifications published by the interface
 - Prometheus HTTP metrics at `/metrics`
 - Graceful startup and shutdown: the MOTU session is seeded before the panel connects, and all loops and connections are closed on shutdown
 - Multi-stage Docker build with a small Alpine runtime image that runs as a non-root user
@@ -36,7 +36,6 @@ flowchart LR
     DS -->|"state and meter changes"| PC["PanelController (binding.py)"]
     PC -->|"feedback"| RP
     API["Quart REST API (api.py)"] --> DS
-    API --> RP
     Prom["Prometheus"] -->|"GET /metrics"| API
 ```
 
@@ -61,6 +60,8 @@ The application is wired together in `src/api.py`. At startup it opens the share
 ├── LICENSE                   GNU Affero General Public License v3.0
 └── src/
     ├── api.py                Quart app, REST API, /metrics, startup and shutdown wiring
+    ├── mixer.py              MOTU mixer controls, value validation and unit conversion
+    ├── levels.py             Linear gain and dB conversions
     ├── binding.py            Controllers, control and feedback maps, raw/dB conversion
     ├── mappings.py           HWC to MOTU path control table and MOTU path to panel feedback table
     ├── motu.py               Async HTTP client, MOTU datastore and meters long-polling
@@ -210,29 +211,51 @@ Then open <http://127.0.0.1:5000/>.
 
 ## REST API
 
-All endpoints take their arguments as query-string parameters. Responses from the `/api/v1/motu/*` endpoints are JSON of the form `{"status": ...}`.
+The mixer API mirrors the MOTU datastore: the URL path after `/api/v1/motu/mix/` is the datastore path after `mix/`, for example `chan/0/matrix/mute`, `chan/0/matrix/aux/0/send`, `chan/0/eq/mid1/gain` or `reverb/0/reverb/predelay`. `GET` reads a value. `PUT` sets it, with the new value, and for levels optionally its `format`, as a JSON object in the request body (`Content-Type: application/json`). `POST` toggles an on/off control and takes no body. Every response under `/api/` is JSON, errors included.
 
-| Method | Path | Parameters | Description |
+| Method | Path | Body | Response |
 | --- | --- | --- | --- |
-| `GET` | `/` | | Landing page |
-| `POST` | `/api/v1/panel` | `command` | Send a command to the SKAARHOJ panel. Returns `OK`. |
-| `GET` | `/api/v1/motu/mute-toggle` | `bus`, `index` | Toggle the mute of a bus channel (`mix/<bus>/<index>/matrix/mute`) and return the new state |
-| `GET` | `/api/v1/motu/mute-status` | `bus`, `index` | Read the current mute state of a bus channel |
-| `GET` | `/api/v1/motu/aux-send-level` | `chan`, `aux`, optional `format` | Read the send level of an input channel to an aux bus |
-| `POST`, `PATCH` | `/api/v1/motu/aux-send-level` | `chan`, `aux`, `value`, optional `format` | Set the send level of an input channel to an aux bus and return the resulting level |
+| `GET` | `/` | | Landing page (HTML) |
+| `GET` | `/api/v1/motu/mix/<path>?format=<format>` | | `{"value": 0.5, "format": "linear"}` |
+| `PUT` | `/api/v1/motu/mix/<path>?format=<format>` | `{"value": -6, "format": "db"}` | `{"value": 0.5, "format": "linear"}` with the value that was applied |
+| `POST` | `/api/v1/motu/mix/<path>` | none | `{"value": true}` with the new state after toggling |
 
-The `format` parameter selects how levels are expressed:
+Each control is validated against the specification the MOTU publishes for it under `mix/ctrls`:
 
-- Omitted: linear gain (the MOTU's native value), limited to the range 0 to +12 dB when setting
+- On/off controls such as `matrix/mute`, `matrix/solo` or `eq/mid1/enable` take `true` or `false`, and are the only controls `POST` can toggle
+- Numeric controls such as `eq/mid1/gain` (dB), `eq/mid1/freq` (Hz) or `comp/attack` (ms) take a number within the control's range
+- Choice controls such as `comp/peak` or `eq/lowshelf/mode` take the number of one of the choices
+- Levels such as `matrix/fader`, sends such as `matrix/aux/<aux>/send`, `gate/threshold` and `talkback/dim` take a number in the unit given by the body's `format`
+- Values without a specification, such as `config/format`, can be read but not changed
+
+Levels can be read and written in any of these formats:
+
+- `linear` (default): linear gain, the MOTU's native value
 - `db`: decibels
-- `raw`: the panel's raw fader scale
+- `raw-panel`: the panel's fader scale
+
+The `format` field in a `PUT` body sets the unit of `value`. The optional `format` query parameter sets the unit of the response, and defaults to the body's `format` on `PUT`. Both apply to levels only.
+
+When setting a level, the value is limited to the control's maximum, which is 4.0 linear (about +12 dB) for faders and sends, and rounded to the MOTU's resolution of six decimal places, so the lowest level above silence is -120 dB. A level of 0 is silence, which is minus infinity in dB. JSON has no infinity, so in `db` format silence is `null`, both in responses and when setting a level. In `raw-panel` format silence is `0`.
+
+Errors are returned as JSON of the form `{"error": "description"}` with one of these status codes:
+
+- `400`: an invalid value or `format`, a `format` in the query or body on a control that is not a level, a change to a read-only value, a `POST` to a control that is not on/off, or a request body that is not a JSON object with a `value` field
+- `404`: the MOTU has no value at the requested path, or the URL does not exist
+- `405`: the HTTP method is not supported for the URL
+- `502`: the MOTU did not accept a change
+- `503`: the MOTU data has not been loaded yet
 
 For example:
 
 ```bash
-curl "http://127.0.0.1:5000/api/v1/motu/mute-status?bus=chan&index=0"
-curl "http://127.0.0.1:5000/api/v1/motu/aux-send-level?chan=0&aux=0&format=db"
-curl -X PATCH "http://127.0.0.1:5000/api/v1/motu/aux-send-level?chan=0&aux=0&value=-10&format=db"
+curl http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/mute
+curl -X PUT http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/mute -H 'Content-Type: application/json' -d '{"value": true}'
+curl -X POST http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/mute
+curl "http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send?format=db"
+curl -X PUT http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send -H 'Content-Type: application/json' -d '{"value": -10, "format": "db"}'
+curl -X PUT "http://127.0.0.1:5000/api/v1/motu/mix/chan/0/matrix/aux/0/send?format=raw-panel" -H 'Content-Type: application/json' -d '{"value": -10, "format": "db"}'
+curl -X PUT http://127.0.0.1:5000/api/v1/motu/mix/chan/0/eq/mid1/gain -H 'Content-Type: application/json' -d '{"value": 3.5}'
 ```
 
 ## Metrics

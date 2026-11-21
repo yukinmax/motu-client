@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import raw_panel
 
+import levels
 import motu
 
 logger = logging.getLogger(__name__)
@@ -36,16 +37,20 @@ OVERRIDE_PATH = "mix/monitor/0/override"
 OVERRIDE_BASE = 1024.0
 OVERRIDE_DISABLED = -1.0
 
+# Ends of the panel fader and meter scales, in dB.
+MIN_DB = -120
+MAX_DB = 12
+
 # Panel raw ↔ Motu dB.
 FADERS_RANGE_MAPPING = (
     (0, -math.inf),
-    ((1, 5), (motu.MIN_DB, -60)),
+    ((1, 5), (MIN_DB, -60)),
     ((5, 125), (-60, -30)),
-    ((125, 1000), (-30, motu.MAX_DB)),
+    ((125, 1000), (-30, MAX_DB)),
 )
 METERS_RANGE_MAPPING = (
     (0, -math.inf),
-    ((1, 1000), (-60, motu.MAX_DB)),
+    ((1, 1000), (-60, MAX_DB)),
 )
 
 _PATH_ROLE_RE = re.compile(r"(\w+)/?(\d*)$")
@@ -61,12 +66,6 @@ def _segments(mapping: tuple, *, reverse: bool = False) -> tuple:
             src, dst = dst, src
         out.append((float(src[0]), float(src[1]), float(dst[0]), float(dst[1])))
     return tuple(out)
-
-
-_FADERS_RAW_TO_DB = _segments(FADERS_RANGE_MAPPING)
-_FADERS_DB_TO_RAW = _segments(FADERS_RANGE_MAPPING, reverse=True)
-_METERS_RAW_TO_DB = _segments(METERS_RANGE_MAPPING)
-_METERS_DB_TO_RAW = _segments(METERS_RANGE_MAPPING, reverse=True)
 
 
 def _lerp(value: float, segments: tuple) -> float:
@@ -85,24 +84,22 @@ def _lerp(value: float, segments: tuple) -> float:
     return first_dst
 
 
-def raw_to_db(value: int | float, range_mapping: tuple) -> float:
-    """Panel raw → dB. Accepts int or float."""
-    segments = (
-        _FADERS_RAW_TO_DB
-        if range_mapping is FADERS_RANGE_MAPPING
-        else _METERS_RAW_TO_DB
-    )
-    return _lerp(float(value), segments)
+class RangeMap:
+    """A panel scale built from a range table, convertible to and from dB."""
+
+    def __init__(self, mapping: tuple) -> None:
+        self._to_db = _segments(mapping)
+        self._from_db = _segments(mapping, reverse=True)
+
+    def to_db(self, value: float) -> float:
+        return _lerp(float(value), self._to_db)
+
+    def from_db(self, db: float) -> int:
+        return int(_lerp(float(db), self._from_db))
 
 
-def db_to_raw(value: int | float, range_mapping: tuple) -> int:
-    """dB → panel raw. Accepts int or float."""
-    segments = (
-        _FADERS_DB_TO_RAW
-        if range_mapping is FADERS_RANGE_MAPPING
-        else _METERS_DB_TO_RAW
-    )
-    return int(_lerp(float(value), segments))
+FADER_SCALE = RangeMap(FADERS_RANGE_MAPPING)
+METER_SCALE = RangeMap(METERS_RANGE_MAPPING)
 
 
 def role_from_path(path: str) -> str:
@@ -236,9 +233,9 @@ class FeedbackMap(_Map):
 class MotuController:
     """Panel HWC → Motu datastore."""
 
-    def __init__(self, control_map: ControlMap, *, range_mapping: tuple) -> None:
+    def __init__(self, control_map: ControlMap, *, fader_scale: RangeMap) -> None:
         self._map = control_map
-        self._range_mapping = range_mapping
+        self._fader_scale = fader_scale
         self._ds = None
         self._role_handlers = {
             "send": self._handle_send,
@@ -304,10 +301,14 @@ class MotuController:
             if cfg.default_level_db is None:
                 logger.debug("No default level for path %s", cfg.path)
                 return 1.0
-            default = motu.db_to_level(cfg.default_level_db)
+            # Rounded like the MOTU stores it, so it compares equal after a poll.
+            default = round(
+                levels.db_to_level(min(cfg.default_level_db, MAX_DB)),
+                levels.LEVEL_DECIMALS,
+            )
             return default if current != default else 1.0
-        db = raw_to_db(raw, self._range_mapping)
-        return motu.db_to_level(db)
+        db = self._fader_scale.to_db(raw)
+        return levels.db_to_level(db)
 
     async def _handle_send(self, cfg: BindingConfig, v: str, hwcid: str | int) -> None:
         level = self._level_from_panel_value(cfg, v)
@@ -360,12 +361,12 @@ class PanelController:
         self,
         feedback_map: FeedbackMap,
         *,
-        faders_range_mapping: tuple,
-        meters_range_mapping: tuple,
+        fader_scale: RangeMap,
+        meter_scale: RangeMap,
     ) -> None:
         self._map = feedback_map
-        self._faders_range_mapping = faders_range_mapping
-        self._meters_range_mapping = meters_range_mapping
+        self._fader_scale = fader_scale
+        self._meter_scale = meter_scale
         self._panel = None
         self._ds = None
         self._ms = None
@@ -554,8 +555,8 @@ class PanelController:
             if tail in ("mute", "fader", "send"):
                 self._update_meter_multiplier_for_path(path)
                 if tail in ("send", "fader"):
-                    db_value = motu.level_to_db(value)
-                    raw_value = db_to_raw(db_value, self._faders_range_mapping)
+                    db_value = levels.level_to_db(value)
+                    raw_value = self._fader_scale.from_db(db_value)
             for target in mapping:
                 handler = self._kind_handlers.get(target.kind)
                 if handler is None:
@@ -606,8 +607,8 @@ class PanelController:
     def _meter_level_to_raw(self, value: int, *, multiplier: float = 1.0) -> int:
         """Meter sample (0 to METER_SCALE) → panel raw."""
         linear = value * multiplier / motu.METER_SCALE
-        db = motu.level_to_db(linear)
-        return db_to_raw(db, self._meters_range_mapping)
+        db = levels.level_to_db(linear)
+        return self._meter_scale.from_db(db)
 
     @staticmethod
     def _split_meter_payload(

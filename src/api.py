@@ -1,12 +1,13 @@
-import json
 import logging
 
 from aioprometheus import MetricsMiddleware
 from aioprometheus.asgi.quart import metrics
 from quart import Quart, request
+from werkzeug.exceptions import BadRequest, HTTPException
 
 import binding
 import mappings
+import mixer
 import motu
 import raw_panel
 from settings import settings
@@ -68,12 +69,12 @@ feedback_map = binding.FeedbackMap.from_raw(mappings.feedback_map)
 
 motu_controller = binding.MotuController(
     control_map,
-    range_mapping=binding.FADERS_RANGE_MAPPING,
+    fader_scale=binding.FADER_SCALE,
 )
 panel_controller = binding.PanelController(
     feedback_map,
-    faders_range_mapping=binding.FADERS_RANGE_MAPPING,
-    meters_range_mapping=binding.METERS_RANGE_MAPPING,
+    fader_scale=binding.FADER_SCALE,
+    meter_scale=binding.METER_SCALE,
 )
 
 motu_controller.set_datastore(motu_ds)
@@ -121,108 +122,81 @@ async def home() -> str:
     return "<h1>MOTU API</h1>"
 
 
-@app.route("/api/v1/panel", methods=["POST"])
-async def panel_command() -> str:
-    try:
-        command = request.args["command"]
-    except KeyError:
-        return "Error: No command provided."
-    await skaarhoj_panel.send(command)
-    return "OK"
+@app.errorhandler(HTTPException)
+async def handle_http_exception(
+    error: HTTPException,
+) -> HTTPException | tuple[dict, int, dict]:
+    """Return Quart's own errors (404, 405, 500...) as JSON under /api/."""
+    if not request.path.startswith("/api/"):
+        return error
+    headers = {
+        name: value
+        for name, value in error.get_headers()
+        if name.lower() not in ("content-type", "content-length")
+    }
+    return {"error": error.description}, error.code or 500, headers
 
 
-@app.route("/api/v1/motu/mute-toggle", methods=["GET"])
-async def mute_toggle() -> str:
-    try:
-        bus = str(request.args["bus"])
-    except KeyError:
-        return "Error: No bus field provided. Please specify bus."
-    try:
-        channel = int(request.args["index"])
-    except KeyError:
-        return "Error: No index field provided. Please specify index."
-    path = f"mix/{bus}/{channel}/matrix/mute"
-    result = await motu_ds.toggle(path)
-    if result is None:
-        return json.dumps({"status": "FAILURE"})
-    return json.dumps({"status": str(result)})
+# ---------------------------------------------------------------------------
+# MOTU mixer
+# ---------------------------------------------------------------------------
+
+mixer_service = mixer.MixerService(motu_ds, scales={"raw-panel": binding.FADER_SCALE})
+
+ERROR_STATUS: dict[type[mixer.MixerError], int] = {
+    mixer.NotLoaded: 503,
+    mixer.NotFound: 404,
+    mixer.Rejected: 502,
+    mixer.ReadOnly: 400,
+    mixer.InvalidValue: 400,
+    mixer.NotToggleable: 400,
+}
 
 
-@app.route("/api/v1/motu/mute-status", methods=["GET"])
-async def mute_status() -> str:
-    try:
-        bus = str(request.args["bus"])
-    except KeyError:
-        return "Error: No bus field provided. Please specify bus."
-    try:
-        channel = int(request.args["index"])
-    except KeyError:
-        return "Error: No index field provided. Please specify index."
-    path = f"mix/{bus}/{channel}/matrix/mute"
-    result = motu_ds.get(path)
-    if result is None:
-        return json.dumps({"status": "FAILURE"})
-    return json.dumps({"status": str(result)})
+@app.errorhandler(mixer.MixerError)
+async def handle_mixer_error(error: mixer.MixerError) -> tuple[dict, int]:
+    return {"error": str(error)}, ERROR_STATUS.get(type(error), 500)
 
 
-@app.route("/api/v1/motu/aux-send-level", methods=["GET"])
-async def mix_send_level_get() -> str:
-    try:
-        channel = int(request.args["chan"])
-    except KeyError:
-        return "Error: No chan field provided. Please specify channel #."
-    try:
-        aux = int(request.args["aux"])
-    except KeyError:
-        return "Error: No aux field provided. Please specify aux #."
-    path = f"mix/chan/{channel}/matrix/aux/{aux}/send"
-    result = motu_ds.get(path)
-    if result is None:
-        return json.dumps({"status": "FAILURE"})
-    try:
-        fmt = request.args["format"]
-    except KeyError:
-        pass
-    else:
-        if fmt in ("db", "raw"):
-            result = motu.level_to_db(result)
-        if fmt == "raw":
-            result = binding.db_to_raw(result, binding.FADERS_RANGE_MAPPING)
-    return json.dumps({"status": f"{result:.10f}"})
+def _response(reading: mixer.Reading) -> dict:
+    if reading.format is None:
+        return {"value": reading.value}
+    return {"value": reading.value, "format": reading.format}
 
 
-@app.route("/api/v1/motu/aux-send-level", methods=["POST", "PATCH"])
-async def mix_send_level_set() -> str:
-    try:
-        channel = int(request.args["chan"])
-    except KeyError:
-        return "Error: No chan field provided. Please specify channel #."
-    try:
-        aux = int(request.args["aux"])
-    except KeyError:
-        return "Error: No aux field provided. Please specify aux #."
-    try:
-        value = float(request.args["value"])
-    except KeyError:
-        return "Error: No value field provided. Please specify new value."
-    try:
-        fmt = request.args["format"]
-    except KeyError:
-        value = motu.limit_to_range(
-            value,
-            motu.LEVEL_RANGE[0],
-            motu.LEVEL_RANGE[1],
+async def _body() -> dict:
+    body = await request.get_json(silent=True)
+    if not isinstance(body, dict):
+        raise BadRequest(
+            "Request body must be a JSON object (Content-Type: application/json)"
         )
-    else:
-        if fmt == "raw":
-            value = binding.raw_to_db(value, binding.FADERS_RANGE_MAPPING)
-        if fmt in ("db", "raw"):
-            value = motu.db_to_level(value)
-    path = f"mix/chan/{channel}/matrix/aux/{aux}/send"
-    result = await motu_ds.set(path, value)
-    if result is None:
-        return json.dumps({"status": "FAILURE"})
-    return json.dumps({"status": f"{result:.10f}"})
+    if "value" not in body:
+        raise BadRequest("Missing field 'value'")
+    return body
+
+
+MIX_ROUTE = "/api/v1/motu/mix/<path:path>"
+
+
+@app.route(MIX_ROUTE, methods=["GET"])
+async def mix_get(path: str) -> dict:
+    fmt = request.args.get("format")
+    return _response(mixer_service.read(f"mix/{path}", fmt))
+
+
+@app.route(MIX_ROUTE, methods=["PUT"])
+async def mix_put(path: str) -> dict:
+    body = await _body()
+    return _response(
+        await mixer_service.write(
+            f"mix/{path}", body["value"], body.get("format"), request.args.get("format")
+        )
+    )
+
+
+@app.route(MIX_ROUTE, methods=["POST"])
+async def mix_toggle(path: str) -> dict:
+    return _response(await mixer_service.toggle(f"mix/{path}"))
 
 
 if __name__ == "__main__":
